@@ -1,0 +1,47 @@
+#!/bin/bash
+# Keep the *.orig.bak copies of the patched gnome-shell files identical to the stock files of the
+# gnome-shell version that is INSTALLED right now. After a gnome-shell update the old backups belong to
+# the previous version; rebuilding or restoring from them would put old-version files into the new
+# shell. This tool never touches the live files: it only refreshes or retires the backups.
+#   --settle N   wait N seconds first (lets an rpm transaction finish when triggered by a path unit)
+set -u
+[[ "${1:-}" == "--settle" ]] && sleep "${2:-30}"
+
+stale_dir=/var/lib/msi-claw/stale-backups
+rc=0
+log() { echo "$*"; logger -t msi-claw-shell-backup-sync -- "$*" 2>/dev/null || true; }
+retire() {
+    install -d -m 0755 "$stale_dir"
+    local dest="$stale_dir/$(basename "$1").$(date +%Y%m%d-%H%M%S)"
+    mv -f "$1" "$dest" && chmod 0644 "$dest"
+    log "retired stale backup $1 -> $dest"
+}
+
+for f in /usr/lib64/gnome-shell/libshell-18.so \
+         /usr/share/gnome-shell/gnome-shell-osk-layouts.gresource \
+         /usr/share/gnome-shell/gnome-shell-theme.gresource; do
+    bak="$f.orig.bak"
+    want=""
+    [[ -e "$f" ]] && want=$(rpm -qf --dump "$f" 2>/dev/null | awk -v p="$f" '$1 == p {print $4; exit}')
+    if [[ -z "$want" ]]; then
+        # File gone or no longer packaged (e.g. libshell soname bump): a backup of it can only do harm
+        [[ -e "$bak" ]] && retire "$bak"
+        continue
+    fi
+    cur=$(sha256sum "$f" | cut -d' ' -f1)
+    have=""
+    [[ -e "$bak" ]] && have=$(sha256sum "$bak" | cut -d' ' -f1)
+
+    if [[ "$have" == "$want" ]]; then
+        continue                                    # backup is the installed version's stock file
+    elif [[ "$cur" == "$want" ]]; then
+        [[ -e "$bak" ]] && retire "$bak"            # live file is stock (fresh update): re-baseline
+        cp -a "$f" "$bak" && chmod a-w,a+r "$bak"
+        log "refreshed $bak from stock $(rpm -qf "$f")"
+    else
+        [[ -e "$bak" ]] && retire "$bak"
+        log "WARNING: $f is modified and no stock backup matches $(rpm -qf "$f"); run 'dnf reinstall gnome-shell' before re-patching"
+        rc=1
+    fi
+done
+exit $rc

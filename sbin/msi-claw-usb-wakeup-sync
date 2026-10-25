@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+import glob
+import os
+from pathlib import Path
+
+INTERNAL_VIDS = {"0db0", "27c6", "0603", "8087", "1d6b"}
+
+
+def read_txt(path: Path, default: str = "") -> str:
+    try:
+        return path.read_text().strip()
+    except OSError:
+        return default
+
+
+def set_wakeup(dev_dir: Path, state: str) -> None:
+    wf = dev_dir / "power" / "wakeup"
+    if wf.exists():
+        cur = read_txt(wf)
+        if cur and cur != state:
+            try:
+                wf.write_text(state + "\n")
+            except OSError:
+                pass
+
+
+def is_external_usb_keyboard(usb_dev: Path) -> bool:
+    vid = read_txt(usb_dev / "idVendor").lower()
+    if not vid or vid in INTERNAL_VIDS:
+        return False
+    prod = read_txt(usb_dev / "product").lower()
+    if "mouse" in prod:
+        return False
+
+    has_full_kbd = False
+    has_xy_pointer = False
+    for inp_str in glob.glob(str(usb_dev) + "/*/0003:*/input/input*"):
+        inp = Path(inp_str)
+        key_words = read_txt(inp / "capabilities" / "key").split()
+        rel_words = read_txt(inp / "capabilities" / "rel").split()
+        if key_words:
+            try:
+                if (int(key_words[-1], 16) & 0x3FFFFFFE) == 0x3FFFFFFE:
+                    has_full_kbd = True
+            except ValueError:
+                pass
+        if rel_words:
+            try:
+                if (int(rel_words[-1], 16) & 0x3) == 0x3:
+                    has_xy_pointer = True
+            except ValueError:
+                pass
+
+    if not has_full_kbd:
+        return False
+    return ("keyboard" in prod) or (not has_xy_pointer)
+
+
+def main() -> int:
+    usb_base = Path("/sys/bus/usb/devices")
+    if not usb_base.exists():
+        return 0
+
+    all_devs = []
+    kbd_ancestors = set()
+
+    for entry in sorted(usb_base.iterdir()):
+        # Skip interface nodes like 3-1.4.4:1.0
+        if ":" in entry.name:
+            continue
+        real = entry.resolve()
+        all_devs.append(real)
+        if is_external_usb_keyboard(real):
+            cur = real
+            while cur != Path("/") and cur.name != "devices":
+                if (cur / "power" / "wakeup").exists():
+                    kbd_ancestors.add(cur)
+                if cur.name.startswith("pci0000:"):
+                    break
+                cur = cur.parent
+
+    for dev in all_devs:
+        # Leave PCI controllers enabled; manage USB root hubs, hubs, and leaf USB devices
+        if dev in kbd_ancestors:
+            set_wakeup(dev, "enabled")
+        else:
+            set_wakeup(dev, "disabled")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

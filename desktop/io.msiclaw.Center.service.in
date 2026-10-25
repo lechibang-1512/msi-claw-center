@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=io.msiclaw.Center
+Exec=@HOME@/.local/bin/msi-claw-center --background

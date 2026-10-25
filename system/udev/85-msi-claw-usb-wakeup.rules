@@ -1,0 +1,3 @@
+# Keep USB hub chain wakeup enabled ONLY along paths leading to an external USB keyboard
+ACTION=="add|remove|change", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", RUN+="/usr/local/sbin/msi-claw-usb-wakeup-sync"
+ACTION=="add|remove", SUBSYSTEM=="input", KERNEL=="event*", SUBSYSTEMS=="usb", RUN+="/usr/local/sbin/msi-claw-usb-wakeup-sync"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Restore MSI Claw A1M EC Battery Charge Threshold
+After=systemd-modules-load.service sys-kernel-debug.mount
+ConditionPathExists=/usr/local/sbin/msi-claw-battery-limit
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/msi-claw-battery-limit restore
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

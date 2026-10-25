@@ -1,0 +1,15 @@
+{
+  "uuid": "claw-controls@msi-claw",
+  "name": "MSI Claw Controls & Big OSK",
+  "description": "Full-width 5-row On-Screen Keyboard (Login Screen & Desktop), touchscreen fix, OSD notifications, and Desktop/Gamepad mode indicator for MSI Claw A1M",
+  "version": 2,
+  "shell-version": [
+    "49",
+    "50"
+  ],
+  "session-modes": [
+    "user",
+    "unlock-dialog",
+    "gdm"
+  ]
+}

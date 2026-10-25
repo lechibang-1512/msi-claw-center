@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MSI Claw Battery & System Optimizer
+Comment=Apply system-level Meteor Lake RAPL TDP, Uncore, Intel LPMD, PCI PM, Btrfs & GDM OSK optimizations
+Exec=/usr/local/sbin/msi-claw-system-power-setup.sh
+Icon=battery-good-symbolic
+Terminal=true
+Categories=System;Settings;HardwareSettings;

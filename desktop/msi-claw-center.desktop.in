@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=MSI Claw Center
+GenericName=Handheld & Mini-PC Power, Display & RGB Control Center
+Comment=Native GTK4 Control Center for MSI Claw A1M TDP, EC Battery Limit, 60/120Hz VRR, Dock Mode & RGB
+Exec=@HOME@/.local/bin/msi-claw-center
+Icon=input-gaming-symbolic
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.msiclaw.Center
+Categories=System;Settings;Utility;Game;
+Keywords=MSI;Claw;Battery;TDP;Power;RGB;VRR;Refresh;Controller;Dock;
