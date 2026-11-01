@@ -1,8 +1,10 @@
 polkit.addRule(function(action, subject) {
+    var prog = action.lookup("program");
     if ((action.id == "io.msiclaw.battery-limit" ||
          (action.id == "org.freedesktop.policykit.exec" &&
-          action.lookup("program") == "/usr/local/sbin/msi-claw-battery-limit")) &&
-        subject.active && subject.local && subject.isInGroup("wheel")) {
+          (prog == "/usr/local/sbin/msi-claw-battery-limit" ||
+           prog == "/usr/local/bin/msi-claw-battery-limit"))) &&
+        subject.isInGroup("wheel")) {
         return polkit.Result.YES;
     }
 });

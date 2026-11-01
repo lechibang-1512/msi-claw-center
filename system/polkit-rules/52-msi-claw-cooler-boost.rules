@@ -1,0 +1,10 @@
+polkit.addRule(function(action, subject) {
+    var prog = action.lookup("program");
+    if ((action.id == "io.msiclaw.cooler-boost" ||
+         (action.id == "org.freedesktop.policykit.exec" &&
+          (prog == "/usr/local/sbin/msi-claw-cooler-boost" ||
+           prog == "/usr/local/bin/msi-claw-cooler-boost"))) &&
+        subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+});

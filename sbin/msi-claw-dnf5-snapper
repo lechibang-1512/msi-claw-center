@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Helper for libdnf5-plugin-actions (/etc/dnf/libdnf5-plugins/actions.d/snapper.actions)
+# Creates lightweight pre/post Btrfs snapshots on / (subvol=root) around DNF5 transactions.
+set -uo pipefail
+
+STAGE="${1:-}"
+ARG="${2:-}"
+
+[[ -x /usr/bin/snapper && -f /etc/snapper/configs/root ]] || exit 0
+
+case "$STAGE" in
+    pre)
+        DESCR="dnf5 transaction"
+        if [[ -n "$ARG" && -r "/proc/${ARG}/cmdline" ]]; then
+            CMDLINE="$(tr '\0' ' ' < "/proc/${ARG}/cmdline" | tr -d '\n\r' | sed 's/[[:space:]]*$//')"
+            [[ -n "$CMDLINE" ]] && DESCR="${CMDLINE:0:120}"
+        fi
+        PRE_NUM="$(/usr/bin/snapper -c root create -t pre -c number -p -d "$DESCR" 2>/dev/null || true)"
+        if [[ "$PRE_NUM" =~ ^[0-9]+$ ]]; then
+            echo "tmp.snapper_pre_number=${PRE_NUM}"
+        fi
+        ;;
+    post)
+        if [[ "$ARG" =~ ^[0-9]+$ ]]; then
+            /usr/bin/snapper -c root create -t post -c number --pre-number "$ARG" -d "dnf5 post (#${ARG})" >/dev/null 2>&1 || true
+            echo "tmp.snapper_pre_number"
+        fi
+        ;;
+esac
+exit 0

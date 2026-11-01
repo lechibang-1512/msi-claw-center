@@ -6,6 +6,7 @@ After=graphical-session.target
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
+Environment=GSK_RENDERER=cairo
 ExecStart=%h/.local/bin/msi-claw-center --background
 Restart=on-failure
 RestartSec=2

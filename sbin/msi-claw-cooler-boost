@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""
+MSI Claw A1M Hardware EC Cooler Boost Controller (1T41EMS1.108 / msi-wmi-platform).
+Uses the in-kernel msi-wmi-platform driver's locked 32-byte WMI get_data (0x1b) & set_data (0x1c)
+methods on EC register 0x98 bit 7 (0x80 mask) via safe read-modify-write so lower EC bits are preserved.
+"""
+import glob
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+EC_COOLER_BOOST_REG = 0x98
+EC_COOLER_BOOST_BIT = 0x80
+RUN_STATE = Path("/run/msi-claw-cooler-boost")
+
+
+def find_wmi_dir():
+    dirs = sorted(glob.glob("/sys/kernel/debug/msi-wmi-platform-*"))
+    if not dirs:
+        subprocess.run(["/usr/sbin/modprobe", "msi_wmi_platform"], check=False)
+        dirs = sorted(glob.glob("/sys/kernel/debug/msi-wmi-platform-*"))
+    return Path(dirs[0]) if dirs else None
+
+
+def wmi_read_ec(wmi_dir: Path, addr: int) -> int:
+    get_data = wmi_dir / "get_data"
+    pkt = bytes([addr & 0xFF]) + (b"\x00" * 31)
+    with open(get_data, "wb") as wf:
+        wf.write(pkt)
+    with open(get_data, "rb") as rf:
+        resp = rf.read(32)
+    if len(resp) < 2 or resp[0] == 0:
+        raise RuntimeError(f"WMI get_data(0x{addr:02x}) failed: {resp.hex(' ')}")
+    return resp[1]
+
+
+def wmi_write_ec(wmi_dir: Path, addr: int, val: int) -> None:
+    set_data = wmi_dir / "set_data"
+    pkt = bytes([addr & 0xFF, val & 0xFF]) + (b"\x00" * 30)
+    with open(set_data, "wb") as wf:
+        wf.write(pkt)
+    with open(set_data, "rb") as rf:
+        resp = rf.read(32)
+    if len(resp) < 1 or resp[0] == 0:
+        raise RuntimeError(f"WMI set_data(0x{addr:02x}, 0x{val:02x}) failed: {resp.hex(' ')}")
+
+
+def write_atomic(path: Path, text: str, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}")
+    tmp.write_text(text)
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def read_state(wmi_dir: Path) -> bool:
+    raw = wmi_read_ec(wmi_dir, EC_COOLER_BOOST_REG)
+    enabled = bool(raw & EC_COOLER_BOOST_BIT)
+    write_atomic(RUN_STATE, "on\n" if enabled else "off\n", 0o644)
+    return enabled
+
+
+def set_state(wmi_dir: Path, enable: bool) -> bool:
+    raw = wmi_read_ec(wmi_dir, EC_COOLER_BOOST_REG)
+    target = (raw | EC_COOLER_BOOST_BIT) if enable else (raw & ~EC_COOLER_BOOST_BIT)
+    wmi_write_ec(wmi_dir, EC_COOLER_BOOST_REG, target)
+    verified = read_state(wmi_dir)
+    if verified != enable:
+        raise RuntimeError(f"Readback mismatch on EC[0x98]: expected {enable}, got {verified}")
+    return verified
+
+
+def main() -> int:
+    cmd = (sys.argv[1] if len(sys.argv) > 1 else "get").strip().lower()
+    wmi_dir = find_wmi_dir()
+    if wmi_dir is None:
+        print("msi-wmi-platform debugfs not available", file=sys.stderr)
+        return 1
+
+    try:
+        if cmd in ("get", "status"):
+            st = read_state(wmi_dir)
+            print("on" if st else "off")
+            return 0
+        elif cmd in ("on", "1", "true", "enable"):
+            st = set_state(wmi_dir, True)
+            print("on" if st else "off")
+            return 0
+        elif cmd in ("off", "auto", "0", "false", "disable"):
+            st = set_state(wmi_dir, False)
+            print("on" if st else "off")
+            return 0
+        elif cmd == "toggle":
+            cur = read_state(wmi_dir)
+            st = set_state(wmi_dir, not cur)
+            print("on" if st else "off")
+            return 0
+        else:
+            print("Usage: msi-claw-cooler-boost [get|on|off|toggle]", file=sys.stderr)
+            return 2
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

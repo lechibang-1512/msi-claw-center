@@ -1,0 +1,3 @@
+# Automatic pre/post Btrfs snapshots on / (subvol=root) for DNF5 transactions
+pre_transaction:::enabled=host-only raise_error=0:/usr/local/sbin/msi-claw-dnf5-snapper pre ${pid}
+post_transaction:::enabled=host-only raise_error=0:/usr/local/sbin/msi-claw-dnf5-snapper post ${tmp.snapper_pre_number}

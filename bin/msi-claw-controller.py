@@ -108,7 +108,10 @@ KEY_BACKSPACE = 14
 KEY_TAB = 15
 KEY_ENTER = 28
 KEY_LEFTCTRL = 29
+KEY_A = 30
 KEY_LEFTSHIFT = 42
+KEY_Z = 44
+KEY_X = 45
 KEY_C = 46
 KEY_V = 47
 KEY_LEFTALT = 56
@@ -121,6 +124,8 @@ KEY_LEFT = 105
 KEY_RIGHT = 106
 KEY_DOWN = 108
 KEY_PAGEDOWN = 109
+KEY_INSERT = 110
+KEY_DELETE = 111
 KEY_MUTE = 113
 KEY_VOLUMEDOWN = 114
 KEY_VOLUMEUP = 115
@@ -229,8 +234,8 @@ class MSIClawDaemon:
             set(range(1, 58)).union(
                 {
                     KEY_F4, KEY_SYSRQ, KEY_UP, KEY_PAGEUP, KEY_LEFT, KEY_RIGHT, KEY_DOWN,
-                    KEY_PAGEDOWN, KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP, KEY_LEFTMETA,
-                    KEY_BACK, KEY_FORWARD, KEY_F15, KEY_F16, KEY_BRIGHTNESSDOWN, KEY_BRIGHTNESSUP,
+                    KEY_PAGEDOWN, KEY_INSERT, KEY_DELETE, KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP,
+                    KEY_LEFTMETA, KEY_BACK, KEY_FORWARD, KEY_F15, KEY_F16, KEY_BRIGHTNESSDOWN, KEY_BRIGHTNESSUP,
                 }
             )
         )
@@ -287,6 +292,27 @@ class MSIClawDaemon:
         self.menu_used_as_chord = False
         self.alt_tab_active = False
 
+        # 6-Axis IMU Gyro Aim state (zero idle CPU: polls only in Gamepad Mode while LT held / active)
+        self.gyro_cfg_file = os.path.expanduser("~/.config/msi-claw-gyro.json")
+        self.gyro_state_file = f"/dev/shm/msi-claw-gyro-{os.getuid()}"
+        self.gyro_enabled = True
+        self.gyro_sens = 4.0
+        self.gyro_mode = "lt_hold"  # "lt_hold" or "always"
+        self.gyro_invert_x = False
+        self.gyro_invert_y = False
+        self.gyro_dir = None
+        self.gyro_scale = 0.000000174
+        self.gyro_active = False
+        self.gyro_lt_latched = False
+        self.gyro_bias_ready = False
+        self.gyro_bias_x = 0.0
+        self.gyro_bias_y = 0.0
+        self.gyro_bias_z = 0.0
+        self.gyro_rem_x = 0.0
+        self.gyro_rem_y = 0.0
+        self._find_gyro_iio()
+        self._load_gyro_config()
+
         # Cached session D-Bus connection (safe fallback if bus isn't ready yet)
         self.bus = None
         self._get_bus()
@@ -295,6 +321,19 @@ class MSIClawDaemon:
         self.sig_r, self.sig_w = os.pipe2(os.O_NONBLOCK | os.O_CLOEXEC)
         # Wake pipe for org.freedesktop.login1.Manager PrepareForSleep (b'S' = sleep, b'W' = wake)
         self.wake_r, self.wake_w = os.pipe2(os.O_NONBLOCK | os.O_CLOEXEC)
+        # Action pipe for D-Bus io.msiclaw.Controller requests (e.g. OSK Copy/Paste)
+        self.action_r, self.action_w = os.pipe2(os.O_NONBLOCK | os.O_CLOEXEC)
+        self.action_buf = b""
+        self.active_win_file = f"/dev/shm/msi-claw-activewin-{os.getuid()}"
+        self.active_win_class = ""
+        self.active_win_desktop = ""
+        try:
+            if os.path.exists(self.active_win_file):
+                parts = open(self.active_win_file).read().rstrip("\n").split("\t", 1)
+                self.active_win_class = parts[0] if len(parts) >= 1 else ""
+                self.active_win_desktop = parts[1] if len(parts) >= 2 else ""
+        except OSError:
+            pass
 
         self.mcu_det_fds = {}   # fd -> path (0db0:1901 Interface 2 kbd/mouse, EVIOCGRAB=1)
         self.face_fds = {}      # fd -> (path, name) (event4 AT kbd & event13 MSI WMI, passive)
@@ -352,31 +391,186 @@ class MSIClawDaemon:
         def _worker():
             ctx = GLib.MainContext.new()
             ctx.push_thread_default()
+            sys_bus = None
+            sess_bus = None
+            node_info = None
+            reg_id = 0
+            owner_id = 0
             try:
-                sys_bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+                try:
+                    sys_bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
 
-                def _on_prepare_for_sleep(_conn, _sender, _path, _iface, _sig, params):
-                    about_to_suspend = bool(params.unpack()[0])
-                    if self.wake_w is not None:
+                    def _on_prepare_for_sleep(_conn, _sender, _path, _iface, _sig, params):
+                        about_to_suspend = bool(params.unpack()[0])
+                        if self.wake_w is not None:
+                            try:
+                                os.write(self.wake_w, b"S" if about_to_suspend else b"W")
+                            except OSError:
+                                pass
+
+                    sys_bus.signal_subscribe(
+                        "org.freedesktop.login1",
+                        "org.freedesktop.login1.Manager",
+                        "PrepareForSleep",
+                        "/org/freedesktop/login1",
+                        None,
+                        Gio.DBusSignalFlags.NONE,
+                        _on_prepare_for_sleep,
+                    )
+                except Exception as e:
+                    print(f"PrepareForSleep monitor unavailable: {e}", flush=True)
+
+                try:
+                    sess_bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+                    node_info = Gio.DBusNodeInfo.new_for_xml(
+                        """<node>
+                          <interface name="io.msiclaw.Controller">
+                            <method name="Copy"/>
+                            <method name="Paste"/>
+                            <method name="Cut"/>
+                            <method name="SelectAll"/>
+                            <method name="Undo"/>
+                            <method name="SendAction">
+                              <arg type="s" name="action" direction="in"/>
+                            </method>
+                            <method name="SendKeyCombo">
+                              <arg type="s" name="key_spec" direction="in"/>
+                              <arg type="b" name="ctrl" direction="in"/>
+                              <arg type="b" name="alt" direction="in"/>
+                              <arg type="b" name="shift" direction="in"/>
+                            </method>
+                            <method name="SetActiveWindow">
+                              <arg type="s" name="resource_class" direction="in"/>
+                              <arg type="s" name="desktop_file" direction="in"/>
+                            </method>
+                            <method name="GetActiveWindow">
+                              <arg type="s" name="resource_class" direction="out"/>
+                              <arg type="s" name="desktop_file" direction="out"/>
+                            </method>
+                            <method name="SetGyroConfig">
+                              <arg type="b" name="enabled" direction="in"/>
+                              <arg type="d" name="sensitivity" direction="in"/>
+                              <arg type="s" name="mode" direction="in"/>
+                            </method>
+                            <method name="GetGyroConfig">
+                              <arg type="b" name="enabled" direction="out"/>
+                              <arg type="d" name="sensitivity" direction="out"/>
+                              <arg type="s" name="mode" direction="out"/>
+                            </method>
+                          </interface>
+                        </node>"""
+                    )
+
+                    def _queue_action(act):
+                        if act and self.action_w is not None:
+                            try:
+                                os.write(self.action_w, (act + "\n").encode("utf-8"))
+                            except OSError:
+                                pass
+
+                    def _on_method_call(_conn, _sender, _path, _iface, method, params, invocation):
                         try:
-                            os.write(self.wake_w, b"S" if about_to_suspend else b"W")
-                        except OSError:
-                            pass
+                            if method == "Copy":
+                                _queue_action("copy")
+                                invocation.return_value(None)
+                            elif method == "Paste":
+                                _queue_action("paste")
+                                invocation.return_value(None)
+                            elif method == "Cut":
+                                _queue_action("cut")
+                                invocation.return_value(None)
+                            elif method == "SelectAll":
+                                _queue_action("select-all")
+                                invocation.return_value(None)
+                            elif method == "Undo":
+                                _queue_action("undo")
+                                invocation.return_value(None)
+                            elif method == "SendAction":
+                                act = str(params.unpack()[0]).strip().lower()
+                                _queue_action(act)
+                                invocation.return_value(None)
+                            elif method == "SendKeyCombo":
+                                raw_spec, c_mod, a_mod, s_mod = params.unpack()
+                                s_str = str(raw_spec or "")
+                                if s_str == " ":
+                                    s_str = "space"
+                                elif s_str in ("\n", "\r"):
+                                    s_str = "enter"
+                                elif s_str == "\t":
+                                    s_str = "tab"
+                                else:
+                                    s_str = s_str.strip()
+                                if s_str:
+                                    _queue_action(
+                                        f"combo:{1 if c_mod else 0}:{1 if a_mod else 0}:{1 if s_mod else 0}:{s_str}"
+                                    )
+                                invocation.return_value(None)
+                            elif method == "SetActiveWindow":
+                                cls, df = params.unpack()
+                                self.active_win_class = str(cls or "")
+                                self.active_win_desktop = str(df or "")
+                                try:
+                                    with open(self.active_win_file, "w") as awf:
+                                        awf.write(f"{self.active_win_class}\t{self.active_win_desktop}\n")
+                                except OSError:
+                                    pass
+                                invocation.return_value(None)
+                            elif method == "GetActiveWindow":
+                                invocation.return_value(
+                                    GLib.Variant("(ss)", (self.active_win_class, self.active_win_desktop))
+                                )
+                            elif method == "SetGyroConfig":
+                                en, sens, gmode = params.unpack()
+                                gmode_s = str(gmode or "lt_hold").strip().lower()
+                                if gmode_s not in ("lt_hold", "always"):
+                                    gmode_s = "lt_hold"
+                                sens_f = max(0.5, min(12.0, float(sens)))
+                                _queue_action(f"gyro:{1 if en else 0}:{sens_f:.2f}:{gmode_s}")
+                                invocation.return_value(None)
+                            elif method == "GetGyroConfig":
+                                invocation.return_value(
+                                    GLib.Variant("(bds)", (bool(self.gyro_enabled), float(self.gyro_sens), str(self.gyro_mode)))
+                                )
+                            else:
+                                invocation.return_dbus_error(
+                                    "org.freedesktop.DBus.Error.UnknownMethod",
+                                    f"Unknown method: {method}",
+                                )
+                        except Exception as err:
+                            invocation.return_dbus_error("io.msiclaw.Controller.Error", str(err))
 
-                sys_bus.signal_subscribe(
-                    "org.freedesktop.login1",
-                    "org.freedesktop.login1.Manager",
-                    "PrepareForSleep",
-                    "/org/freedesktop/login1",
-                    None,
-                    Gio.DBusSignalFlags.NONE,
-                    _on_prepare_for_sleep,
-                )
-                loop = GLib.MainLoop.new(ctx, False)
-                loop.run()
-            except Exception as e:
-                print(f"PrepareForSleep monitor unavailable: {e}", flush=True)
+                    reg_fn = getattr(sess_bus, "register_object_with_closures2", sess_bus.register_object)
+                    reg_id = reg_fn(
+                        "/io/msiclaw/Controller",
+                        node_info.interfaces[0],
+                        _on_method_call,
+                        None,
+                        None,
+                    )
+                    owner_id = Gio.bus_own_name_on_connection(
+                        sess_bus,
+                        "io.msiclaw.Controller",
+                        Gio.BusNameOwnerFlags.REPLACE | Gio.BusNameOwnerFlags.ALLOW_REPLACEMENT,
+                        None,
+                        None,
+                    )
+                except Exception as e:
+                    print(f"Session D-Bus io.msiclaw.Controller unavailable: {e}", flush=True)
+
+                if sys_bus is not None or sess_bus is not None:
+                    loop = GLib.MainLoop.new(ctx, False)
+                    loop.run()
             finally:
+                if owner_id:
+                    try:
+                        Gio.bus_unown_name(owner_id)
+                    except Exception:
+                        pass
+                if reg_id and sess_bus is not None:
+                    try:
+                        sess_bus.unregister_object(reg_id)
+                    except Exception:
+                        pass
                 ctx.pop_thread_default()
 
         t = threading.Thread(target=_worker, name="claw-sleep-monitor", daemon=True)
@@ -448,14 +642,18 @@ class MSIClawDaemon:
         # Otherwise bind XF86Launch7 (KEY_F16) and XF86Launch6 (KEY_F15), which pc105+inet produces.
         left_bind = "" if self.has_atkbd_face else "XF86Launch7"
         right_bind = "" if self.has_atkbd_face else "XF86Launch6"
+        schema_id = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding"
         if Gio is not None:
             try:
+                src = Gio.SettingsSchemaSource.get_default()
+                if src is None or src.lookup(schema_id, True) is None:
+                    return
                 s0 = Gio.Settings.new_with_path(
-                    "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding",
+                    schema_id,
                     "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/",
                 )
                 s1 = Gio.Settings.new_with_path(
-                    "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding",
+                    schema_id,
                     "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/",
                 )
                 if s0.get_string("binding") != left_bind:
@@ -465,17 +663,7 @@ class MSIClawDaemon:
                 Gio.Settings.sync()
                 return
             except Exception:
-                pass
-        for idx, bind in (("custom0", left_bind), ("custom1", right_bind)):
-            subprocess.run(
-                [
-                    "gsettings", "set",
-                    f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/{idx}/",
-                    "binding", f"'{bind}'",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+                return
 
     def open_aux_devices(self):
         open_mcu_paths = set(self.mcu_det_fds.values())
@@ -542,8 +730,48 @@ class MSIClawDaemon:
         self.face_fds.clear()
         self.has_atkbd_face = False
 
+    def _desktop_type(self):
+        de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+        sess = os.environ.get("DESKTOP_SESSION", "").lower()
+        if "kde" in de or "plasma" in sess:
+            return "kde"
+        if "labwc" in de or "wlroots" in de or "labwc" in sess:
+            return "labwc"
+        if "gnome" in de or "gnome" in sess:
+            return "gnome"
+        if subprocess.call(["pgrep", "-x", "kwin_wayland"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            return "kde"
+        if subprocess.call(["pgrep", "-x", "labwc"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            return "labwc"
+        if subprocess.call(["pgrep", "-x", "gnome-shell"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            return "gnome"
+        return "unknown"
+
+    def _is_labwc_session(self):
+        return self._desktop_type() == "labwc"
+
+    def _wayland_env(self):
+        env = os.environ.copy()
+        runtime_dir = env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+        env["XDG_RUNTIME_DIR"] = runtime_dir
+        if not env.get("WAYLAND_DISPLAY"):
+            for candidate in ("wayland-0", "wayland-1"):
+                if os.path.exists(os.path.join(runtime_dir, candidate)):
+                    env["WAYLAND_DISPLAY"] = candidate
+                    break
+        env.setdefault("XDG_SESSION_TYPE", "wayland")
+        env.setdefault("QT_QPA_PLATFORM", "wayland")
+        dtype = self._desktop_type()
+        if dtype == "labwc":
+            env.setdefault("XDG_CURRENT_DESKTOP", "labwc:wlroots")
+            env.setdefault("XDG_SESSION_DESKTOP", "labwc")
+        elif dtype == "kde":
+            env.setdefault("XDG_CURRENT_DESKTOP", "KDE")
+            env.setdefault("XDG_SESSION_DESKTOP", "KDE")
+        return env
+
     def wake_display_and_lockscreen(self):
-        # 1. Zero-net pointer micro-nudge resets Mutter / KWin IdleMonitor to 0ms and lifts lockscreen
+        # 1. Zero-net pointer micro-nudge resets Mutter / KWin / swayidle IdleMonitor to 0ms
         try:
             self.vmouse.emit(EV_REL, REL_X, 1)
             self.vmouse.syn()
@@ -552,15 +780,39 @@ class MSIClawDaemon:
         except OSError:
             pass
 
-        # 2. KDE Plasma DPMS wake
-        if os.path.exists("/usr/bin/kscreen-doctor"):
-            try:
-                subprocess.Popen(["kscreen-doctor", "--dpms", "on"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
+        dtype = self._desktop_type()
+        wenv = self._wayland_env()
+
+        # 2. KDE Plasma / wlroots (labwc) DPMS wake
+        if dtype == "labwc" and os.path.exists("/usr/bin/wlopm"):
+            if wenv.get("WAYLAND_DISPLAY"):
+                try:
+                    subprocess.Popen(
+                        ["wlopm", "--on", "*"],
+                        env=wenv,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                except Exception:
+                    pass
+            return
+        elif dtype == "kde" and os.path.exists("/usr/bin/kscreen-doctor"):
+            # Only invoke kscreen-doctor when WAYLAND_DISPLAY socket is present (prevents Qt xcb SIGABRT coredumps)
+            wdisp = wenv.get("WAYLAND_DISPLAY")
+            if wdisp and os.path.exists(os.path.join(wenv["XDG_RUNTIME_DIR"], wdisp)):
+                try:
+                    subprocess.Popen(
+                        ["kscreen-doctor", "--dpms", "on"],
+                        env=wenv,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                except Exception:
+                    pass
+            return
 
         # 3. Ensure Mutter DPMS PowerSaveMode is ON (0) so post-suspend blanking never leaves panel dark
-        if GLib is not None:
+        if dtype == "gnome" and GLib is not None:
             try:
                 bus = self._get_bus()
                 if bus is not None:
@@ -638,6 +890,100 @@ class MSIClawDaemon:
         self.lx = self.ly = self.rx = self.ry = 0
         self.lt = self.rt = 0
         self.hat_x = self.hat_y = 0
+        self.gyro_lt_latched = False
+        self._set_gyro_hw_active(False)
+
+    def _find_gyro_iio(self):
+        for iio_dir in sorted(glob.glob("/sys/bus/iio/devices/iio:device*")):
+            try:
+                name = open(os.path.join(iio_dir, "name")).read().strip()
+            except OSError:
+                continue
+            if name == "gyro_3d" and os.path.exists(os.path.join(iio_dir, "in_anglvel_x_raw")):
+                self.gyro_dir = iio_dir
+                try:
+                    sc = float(open(os.path.join(iio_dir, "in_anglvel_scale")).read().strip())
+                    if sc > 0:
+                        self.gyro_scale = sc
+                except Exception:
+                    pass
+                return
+
+    def _load_gyro_config(self):
+        if os.path.exists(self.gyro_cfg_file):
+            try:
+                cfg = json.loads(open(self.gyro_cfg_file).read())
+                self.gyro_enabled = bool(cfg.get("enabled", True))
+                self.gyro_sens = max(0.5, min(12.0, float(cfg.get("sensitivity", 4.0))))
+                gmode = str(cfg.get("mode", "lt_hold")).strip().lower()
+                self.gyro_mode = gmode if gmode in ("lt_hold", "always") else "lt_hold"
+                self.gyro_invert_x = bool(cfg.get("invert_x", False))
+                self.gyro_invert_y = bool(cfg.get("invert_y", False))
+            except Exception:
+                pass
+        else:
+            self._save_gyro_config()
+        self._write_gyro_state()
+
+    def _save_gyro_config(self):
+        try:
+            os.makedirs(os.path.dirname(self.gyro_cfg_file), exist_ok=True)
+            tmp = self.gyro_cfg_file + f".tmp.{os.getpid()}"
+            with open(tmp, "w") as gf:
+                gf.write(
+                    json.dumps(
+                        {
+                            "enabled": self.gyro_enabled,
+                            "sensitivity": round(self.gyro_sens, 2),
+                            "mode": self.gyro_mode,
+                            "invert_x": self.gyro_invert_x,
+                            "invert_y": self.gyro_invert_y,
+                        },
+                        indent=2,
+                    )
+                    + "\n"
+                )
+            os.replace(tmp, self.gyro_cfg_file)
+        except OSError:
+            pass
+        self._write_gyro_state()
+
+    def _write_gyro_state(self):
+        try:
+            with open(self.gyro_state_file, "w") as sf:
+                sf.write(f"{1 if self.gyro_enabled else 0}\t{self.gyro_sens:.2f}\t{self.gyro_mode}\n")
+        except OSError:
+            pass
+
+    def _set_gyro_hw_active(self, active):
+        if self.gyro_active == active:
+            return
+        self.gyro_active = active
+        self.gyro_rem_x = 0.0
+        self.gyro_rem_y = 0.0
+        if self.gyro_dir is None:
+            return
+        freq_path = os.path.join(self.gyro_dir, "in_anglvel_sampling_frequency")
+        hyst_path = os.path.join(self.gyro_dir, "in_anglvel_hysteresis")
+        try:
+            with open(freq_path, "w") as ff:
+                ff.write("100\n" if active else "10\n")
+        except OSError:
+            pass
+        try:
+            with open(hyst_path, "w") as hf:
+                hf.write("0\n" if active else "0.000010\n")
+        except OSError:
+            pass
+
+    def toggle_gyro_aim(self):
+        self.gyro_enabled = not self.gyro_enabled
+        if not self.gyro_enabled:
+            self._set_gyro_hw_active(False)
+        self._save_gyro_config()
+        state_txt = f"ON (Hold LT · {self.gyro_sens:.1f}x)" if self.gyro_enabled else "OFF"
+        self.notify_user("MSI Claw Gyro Aim", f"6-Axis Motion Aim: {state_txt}", "input-gaming-symbolic")
+        print(f"Gyro Aim toggled -> {state_txt}", flush=True)
 
     def update_grab(self):
         if self.ctrl_fd is None:
@@ -684,15 +1030,19 @@ class MSIClawDaemon:
             None,
         )
 
-    def notify_user(self, title, body, icon="input-gaming-symbolic"):
+    def notify_user(self, title, body, icon="input-gaming-symbolic", critical=False, timeout_ms=2000):
         if GLib is not None:
-            try:
-                self._call_claw("ShowOSD", GLib.Variant("(ss)", (icon, f"{title}: {body}")))
-            except Exception:
-                pass
+            if self._desktop_type() == "gnome":
+                try:
+                    self._call_claw("ShowOSD", GLib.Variant("(ss)", (icon, f"{title}: {body}")))
+                except Exception:
+                    pass
             try:
                 bus = self._get_bus()
                 if bus is not None:
+                    hints = {"x-canonical-private-synchronous": GLib.Variant("s", "msi-claw-mode")}
+                    if critical:
+                        hints["urgency"] = GLib.Variant("y", 2)
                     bus.call_sync(
                         "org.freedesktop.Notifications",
                         "/org/freedesktop/Notifications",
@@ -707,8 +1057,8 @@ class MSIClawDaemon:
                                 title,
                                 body,
                                 [],
-                                {"x-canonical-private-synchronous": GLib.Variant("s", "msi-claw-mode")},
-                                2000,
+                                hints,
+                                timeout_ms,
                             ),
                         ),
                         None,
@@ -718,6 +1068,47 @@ class MSIClawDaemon:
                     )
             except Exception:
                 pass
+
+    def _check_battery_alerts(self):
+        if not self._is_labwc_session():
+            return
+        try:
+            status = open("/sys/class/power_supply/BAT1/status").read().strip()
+            cap = int(open("/sys/class/power_supply/BAT1/capacity").read().strip())
+        except Exception:
+            return
+        last_level = getattr(self, "_bat_warn_level", 100)
+        if status != "Discharging":
+            if cap > 20 or status in ("Charging", "Full"):
+                self._bat_warn_level = 100
+            return
+        if cap <= 5 and last_level > 5:
+            self._bat_warn_level = 5
+            self.notify_user(
+                "CRITICAL BATTERY — 5%",
+                "Connect USB-C charger immediately (auto-sleep imminent)",
+                "battery-caution-symbolic",
+                critical=True,
+                timeout_ms=8000,
+            )
+        elif cap <= 10 and last_level > 10:
+            self._bat_warn_level = 10
+            self.notify_user(
+                "Battery Very Low — 10%",
+                "Plug in USB-C power soon to avoid mid-game sleep",
+                "battery-low-symbolic",
+                critical=True,
+                timeout_ms=6000,
+            )
+        elif cap <= 20 and last_level > 20:
+            self._bat_warn_level = 20
+            self.notify_user(
+                "Battery Low — 20%",
+                "Consider switching to 60Hz or Power Saver (F15)",
+                "battery-low-symbolic",
+                critical=False,
+                timeout_ms=3500,
+            )
 
     def toggle_mode(self):
         # Release any held mouse buttons or keys before switching
@@ -732,7 +1123,7 @@ class MSIClawDaemon:
             self.update_grab()
             self.notify_user("MSI Claw Mode", "Desktop Control Mode (Mouse & Keyboard Active)", "input-mouse-symbolic")
 
-        if GLib is not None:
+        if self._desktop_type() == "gnome" and GLib is not None:
             try:
                 self._call_claw("SetControllerMode", GLib.Variant("(s)", (self.mode,)))
             except Exception:
@@ -748,6 +1139,21 @@ class MSIClawDaemon:
             pass
 
     def toggle_osk(self):
+        # 0. Fast-path for lightweight wvkbd-mobintl OSK in labwc / wlroots session
+        osk_helper = os.path.expanduser("~/.local/bin/msi-claw-osk-toggle.sh")
+        if os.path.exists(osk_helper) and (
+            self._is_labwc_session()
+            or subprocess.call(["pgrep", "-x", "wvkbd-mobintl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+        ):
+            subprocess.Popen(
+                [osk_helper],
+                env=self._wayland_env(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return
+
         # 1. Try KWin VirtualKeyboard (KDE Plasma Wayland)
         bus = self._get_bus()
         if bus is not None:
@@ -851,6 +1257,7 @@ class MSIClawDaemon:
                     pass
             subprocess.Popen(
                 [os.path.expanduser("~/.local/bin/msi-claw-center"), "--toggle"],
+                env=self._wayland_env(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
@@ -859,73 +1266,103 @@ class MSIClawDaemon:
             print(f"Error toggling MSI Claw Center: {e}", flush=True)
 
     def toggle_overview(self):
+        dtype = self._desktop_type()
+        # 0. Fast-path for labwc: toggle fuzzel launcher directly with zero D-Bus timeout
+        if dtype == "labwc":
+            if subprocess.call(["pkill", "-x", "fuzzel"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
+                subprocess.Popen(
+                    ["fuzzel"],
+                    env=self._wayland_env(),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            return
+
         bus = self._get_bus()
         if bus is not None:
             # 1. Try KWin Overview (KDE Plasma)
-            try:
-                bus.call_sync(
-                    "org.kde.kglobalaccel",
-                    "/component/kwin",
-                    "org.kde.kglobalaccel.Component",
-                    "invokeShortcut",
-                    GLib.Variant("(s)", ("Overview",)),
-                    None,
-                    Gio.DBusCallFlags.NONE,
-                    200,
-                    None,
-                )
-                return
-            except Exception:
-                pass
-
-            # 2. Try GNOME Shell Overview / App Grid
-            try:
-                res = bus.call_sync(
-                    "org.gnome.Shell",
-                    "/org/gnome/Shell",
-                    "org.freedesktop.DBus.Properties",
-                    "Get",
-                    GLib.Variant("(ss)", ("org.gnome.Shell", "OverviewActive")),
-                    None,
-                    Gio.DBusCallFlags.NONE,
-                    300,
-                    None,
-                )
-                is_active = bool(res.unpack()[0])
-                if is_active:
-                    self._call_claw("ToggleOverview")
-                    return
-                self._call_claw("ShowApps")
-                return
-            except Exception:
-                pass
-
-        self.vkbd.tap_key(KEY_LEFTMETA)
-
-    def toggle_quick_settings(self):
-        bus = self._get_bus()
-        if bus is not None:
-            # 1. Try GNOME Shell ClawControls first
-            try:
-                self._call_claw("ToggleQuickSettings")
-                return
-            except Exception:
-                pass
-
-            # 2. Try KDE Plasma System Tray (Quick Settings)
-            for action in ("activate widget 7", "activate widget 8"):
+            if dtype in ("kde", "unknown"):
                 try:
                     bus.call_sync(
                         "org.kde.kglobalaccel",
-                        "/component/plasmashell",
+                        "/component/kwin",
                         "org.kde.kglobalaccel.Component",
                         "invokeShortcut",
-                        GLib.Variant("(s)", (action,)),
+                        GLib.Variant("(s)", ("Overview",)),
                         None,
                         Gio.DBusCallFlags.NONE,
                         200,
                         None,
                     )
+                    return
+                except Exception:
+                    pass
+
+            # 2. Try GNOME Shell Overview / App Grid
+            if dtype in ("gnome", "unknown"):
+                try:
+                    res = bus.call_sync(
+                        "org.gnome.Shell",
+                        "/org/gnome/Shell",
+                        "org.freedesktop.DBus.Properties",
+                        "Get",
+                        GLib.Variant("(ss)", ("org.gnome.Shell", "OverviewActive")),
+                        None,
+                        Gio.DBusCallFlags.NONE,
+                        300,
+                        None,
+                    )
+                    is_active = bool(res.unpack()[0])
+                    if is_active:
+                        self._call_claw("ToggleOverview")
+                        return
+                    self._call_claw("ShowApps")
+                    return
+                except Exception:
+                    pass
+
+        self.vkbd.tap_key(KEY_LEFTMETA)
+
+    def toggle_quick_settings(self):
+        dtype = self._desktop_type()
+        # 0. Fast-path for lightweight labwc Quick Settings menu (F15)
+        quick_helper = os.path.expanduser("~/.local/bin/msi-claw-quick-menu.sh")
+        if dtype == "labwc" and os.path.exists(quick_helper):
+            subprocess.Popen(
+                [quick_helper],
+                env=self._wayland_env(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return
+
+        bus = self._get_bus()
+        if bus is not None:
+            # 1. Try KDE Plasma System Tray (Quick Settings) directly when on KDE
+            if dtype in ("kde", "unknown"):
+                for action in ("activate widget 7", "activate widget 8"):
+                    try:
+                        bus.call_sync(
+                            "org.kde.kglobalaccel",
+                            "/component/plasmashell",
+                            "org.kde.kglobalaccel.Component",
+                            "invokeShortcut",
+                            GLib.Variant("(s)", (action,)),
+                            None,
+                            Gio.DBusCallFlags.NONE,
+                            200,
+                            None,
+                        )
+                        return
+                    except Exception:
+                        pass
+
+            # 2. Try GNOME Shell ClawControls
+            if dtype in ("gnome", "unknown"):
+                try:
+                    self._call_claw("ToggleQuickSettings")
                     return
                 except Exception:
                     pass
@@ -1006,6 +1443,132 @@ class MSIClawDaemon:
             self.sync_dock_state(notify=True)
         elif cmd == "wake-display":
             self.wake_display_and_lockscreen()
+        elif cmd == "reload-gyro":
+            self._load_gyro_config()
+            if not self._needs_gyro_tick():
+                self._set_gyro_hw_active(False)
+        elif cmd == "toggle-gyro":
+            self.toggle_gyro_aim()
+        elif cmd in ("copy", "paste", "cut", "select-all", "undo"):
+            self.perform_clipboard_action(cmd)
+
+    def _window_terminal_kind(self):
+        cls = self.active_win_class.strip().lower()
+        df = self.active_win_desktop.strip().lower()
+        if not cls and not df:
+            return None
+        tokens = set(cls.replace("/", ".").split(".")) | set(df.replace("/", ".").split("."))
+        if tokens & {"xterm", "uxterm", "urxvt", "rxvt"}:
+            return "xterm"
+        if cls == "org.gnome.console" or df == "org.gnome.console":
+            return "modern"
+        modern_terminals = {
+            "konsole",
+            "yakuake",
+            "ptyxis",
+            "gnome-terminal",
+            "gnome-terminal-server",
+            "kgx",
+            "alacritty",
+            "foot",
+            "footclient",
+            "kitty",
+            "wezterm",
+            "wezterm-gui",
+            "ghostty",
+            "tilix",
+            "terminator",
+            "xfce4-terminal",
+            "qterminal",
+            "lxterminal",
+            "mate-terminal",
+            "sakura",
+            "st",
+            "st-256color",
+        }
+        if tokens & modern_terminals:
+            return "modern"
+        return None
+
+    def perform_clipboard_action(self, action):
+        act = (action or "").strip().lower()
+        term_kind = self._window_terminal_kind()
+        if act == "copy":
+            if term_kind == "xterm":
+                self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_INSERT)
+            elif term_kind == "modern":
+                self.vkbd.tap_combo([KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_C)
+            else:
+                self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_C)
+        elif act == "paste":
+            if term_kind == "xterm":
+                self.vkbd.tap_combo([KEY_LEFTSHIFT], KEY_INSERT)
+            elif term_kind == "modern":
+                self.vkbd.tap_combo([KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_V)
+            else:
+                self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_V)
+        elif act == "cut":
+            if term_kind is not None:
+                # Terminals do not support cutting terminal output; copy instead without sending ^X
+                if term_kind == "xterm":
+                    self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_INSERT)
+                else:
+                    self.vkbd.tap_combo([KEY_LEFTCTRL, KEY_LEFTSHIFT], KEY_C)
+            else:
+                self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_X)
+        elif act == "select-all":
+            if term_kind is None:
+                self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_A)
+        elif act == "undo":
+            if term_kind is None:
+                self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_Z)
+
+    def perform_key_combo(self, key_spec, ctrl=False, alt=False, shift=False):
+        spec = (key_spec or "").strip()
+        if not spec:
+            return
+        unshifted_map = {
+            "esc": KEY_ESC, "escape": KEY_ESC,
+            "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10, "0": 11,
+            "-": 12, "=": 13,
+            "backspace": KEY_BACKSPACE, "bksp": KEY_BACKSPACE,
+            "tab": KEY_TAB,
+            "q": 16, "w": 17, "e": 18, "r": 19, "t": 20, "y": 21, "u": 22, "i": 23, "o": 24, "p": 25,
+            "[": 26, "]": 27,
+            "enter": KEY_ENTER, "return": KEY_ENTER,
+            "a": 30, "s": 31, "d": 32, "f": 33, "g": 34, "h": 35, "j": 36, "k": 37, "l": 38,
+            ";": 39, "'": 40, "`": 41, "\\": 43,
+            "z": 44, "x": 45, "c": 46, "v": 47, "b": 48, "n": 49, "m": 50,
+            ",": 51, ".": 52, "/": 53,
+            "space": KEY_SPACE,
+            "up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT,
+            "pageup": KEY_PAGEUP, "pagedown": KEY_PAGEDOWN,
+            "insert": KEY_INSERT, "delete": KEY_DELETE, "del": KEY_DELETE,
+        }
+        shifted_symbol_map = {
+            "!": 2, "@": 3, "#": 4, "$": 5, "%": 6, "^": 7, "&": 8, "*": 9, "(": 10, ")": 11,
+            "_": 12, "+": 13, "{": 26, "}": 27, "|": 43, ":": 39, '"': 40, "~": 41,
+            "<": 51, ">": 52, "?": 53,
+        }
+        need_shift = bool(shift)
+        low = spec.lower()
+        code = unshifted_map.get(low)
+        if code is None and spec in shifted_symbol_map:
+            code = shifted_symbol_map[spec]
+            need_shift = True
+        if code is None:
+            return
+        mods = []
+        if ctrl:
+            mods.append(KEY_LEFTCTRL)
+        if alt:
+            mods.append(KEY_LEFTALT)
+        if need_shift:
+            mods.append(KEY_LEFTSHIFT)
+        if mods:
+            self.vkbd.tap_combo(mods, code)
+        else:
+            self.vkbd.tap_key(code)
 
     def _detect_dock_state(self):
         ext_outputs = []
@@ -1118,6 +1681,7 @@ class MSIClawDaemon:
         self._apply_rgb(r, g, b, br)
 
     def sync_dock_state(self, notify=True, force_rgb=False):
+        self._check_battery_alerts()
         docked, detail, has_ext_kbd = self._detect_dock_state()
         state_str = f"docked:{detail}" if docked else "handheld"
         prev = self.is_docked
@@ -1136,6 +1700,28 @@ class MSIClawDaemon:
 
         # 0. Auto-toggle Controller RGB: Off (0W) when docked, restore handheld preset on undock
         self._sync_dock_rgb(docked)
+
+        # 0b. labwc / wlroots: configure external display hotplug & suppress auto-OSK when external keyboard is docked
+        if self._is_labwc_session():
+            disp_init = os.path.expanduser("~/.config/labwc/display-init.sh")
+            if os.path.exists(disp_init):
+                subprocess.Popen(
+                    [disp_init],
+                    env=self._wayland_env(),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            osk_helper = os.path.expanduser("~/.local/bin/msi-claw-osk-toggle.sh")
+            if os.path.exists(osk_helper):
+                daemon_flag = "--daemon-manual" if (docked and has_ext_kbd) else "--daemon"
+                subprocess.Popen(
+                    [osk_helper, daemon_flag],
+                    env=self._wayland_env(),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
 
         # 1. KDE Plasma Wayland: switch KWin VirtualKeyboard mode
         #    mode=0 (Touch Only) when docked so physical mouse clicks never pop up OSK on external monitor;
@@ -1180,10 +1766,12 @@ class MSIClawDaemon:
         # 2. GNOME Shell: disable auto accessibility OSK when an external keyboard is docked; restore on undock
         if Gio is not None:
             try:
-                a11y = Gio.Settings.new("org.gnome.desktop.a11y.applications")
-                want_osk = not (docked and has_ext_kbd)
-                if a11y.get_boolean("screen-keyboard-enabled") != want_osk:
-                    a11y.set_boolean("screen-keyboard-enabled", want_osk)
+                src = Gio.SettingsSchemaSource.get_default()
+                if src is not None and src.lookup("org.gnome.desktop.a11y.applications", True) is not None:
+                    a11y = Gio.Settings.new("org.gnome.desktop.a11y.applications")
+                    want_osk = not (docked and has_ext_kbd)
+                    if a11y.get_boolean("screen-keyboard-enabled") != want_osk:
+                        a11y.set_boolean("screen-keyboard-enabled", want_osk)
             except Exception:
                 pass
 
@@ -1259,6 +1847,20 @@ class MSIClawDaemon:
                         self.vkbd.tap_combo([KEY_LEFTALT], KEY_TAB)
                 return
 
+            # View + L3 toggles 6-Axis Gyro Aim in both Gamepad & Desktop modes
+            if code == BTN_THUMBL and val == 1 and self.view_held:
+                self.view_used_as_chord = True
+                self.toggle_gyro_aim()
+                return
+
+        elif ev_type == EV_ABS and code == ABS_Z:
+            # Always track LT (0..255) in both modes so LT-Hold Gyro Aim wakes immediately in Gamepad Mode
+            self.lt = val
+            if val > 40:
+                self.gyro_lt_latched = True
+            elif val < 28:
+                self.gyro_lt_latched = False
+
         if self.mode != "desktop":
             return
 
@@ -1310,7 +1912,7 @@ class MSIClawDaemon:
                 elif self.view_held:
                     if val == 1:
                         self.view_used_as_chord = True
-                        self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_V)
+                        self.perform_clipboard_action("paste")
                 else:
                     self.vmouse.key(BTN_LEFT, val)
 
@@ -1328,7 +1930,7 @@ class MSIClawDaemon:
                 if val == 1:
                     if self.view_held:
                         self.view_used_as_chord = True
-                        self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_C)
+                        self.perform_clipboard_action("copy")
                     else:
                         self.toggle_osk()
 
@@ -1462,6 +2064,79 @@ class MSIClawDaemon:
             )
         )
 
+    def _needs_gyro_tick(self):
+        if self.gyro_dir is None or not self.gyro_enabled or self.mode != "gamepad":
+            return False
+        if self.gyro_mode == "always":
+            return True
+        return self.gyro_lt_latched
+
+    def tick_gyro(self, dt):
+        if not self._needs_gyro_tick():
+            self._set_gyro_hw_active(False)
+            return
+        self._set_gyro_hw_active(True)
+        try:
+            rx = int(open(os.path.join(self.gyro_dir, "in_anglvel_x_raw")).read().strip())
+            ry = int(open(os.path.join(self.gyro_dir, "in_anglvel_y_raw")).read().strip())
+            rz = int(open(os.path.join(self.gyro_dir, "in_anglvel_z_raw")).read().strip())
+        except Exception:
+            return
+
+        wx = rx * self.gyro_scale
+        wy = ry * self.gyro_scale
+        wz = rz * self.gyro_scale
+
+        if not self.gyro_bias_ready:
+            self.gyro_bias_x = wx
+            self.gyro_bias_y = wy
+            self.gyro_bias_z = wz
+            self.gyro_bias_ready = True
+            return
+
+        ux = wx - self.gyro_bias_x
+        uy = wy - self.gyro_bias_y
+        uz = wz - self.gyro_bias_z
+        omega = math.sqrt(ux * ux + uy * uy + uz * uz)
+
+        # Adaptive resting bias calibration when handheld is held still (< ~1.8 deg/s)
+        if omega < 0.032:
+            alpha = 0.05
+            self.gyro_bias_x += alpha * (wx - self.gyro_bias_x)
+            self.gyro_bias_y += alpha * (wy - self.gyro_bias_y)
+            self.gyro_bias_z += alpha * (wz - self.gyro_bias_z)
+
+        # Soft noise deadzone (~0.37 deg/s) suppresses stationary IMU jitter
+        deadzone = 0.0065
+        if omega <= deadzone:
+            return
+        scale_dz = (omega - deadzone) / omega
+        ux *= scale_dz
+        uy *= scale_dz
+        uz *= scale_dz
+
+        # Player-Space handheld mapping: upright Yaw (-uy) + reclined Roll (-uz) -> X, Pitch (-ux) -> Y
+        horiz_rate = -(uy + 0.60 * uz)
+        vert_rate = -ux
+        if self.gyro_invert_x:
+            horiz_rate = -horiz_rate
+        if self.gyro_invert_y:
+            vert_rate = -vert_rate
+
+        px_per_rad = self.gyro_sens * 180.0
+        self.gyro_rem_x += horiz_rate * px_per_rad * dt
+        self.gyro_rem_y += vert_rate * px_per_rad * dt
+        dx = int(self.gyro_rem_x)
+        dy = int(self.gyro_rem_y)
+        if dx != 0 or dy != 0:
+            self.gyro_rem_x -= dx
+            self.gyro_rem_y -= dy
+            if dx != 0:
+                self.vmouse.emit(EV_REL, REL_X, dx)
+            if dy != 0:
+                self.vmouse.emit(EV_REL, REL_Y, dy)
+            self.vmouse.syn()
+
     def _handle_signals(self):
         while True:
             try:
@@ -1502,6 +2177,66 @@ class MSIClawDaemon:
                 if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
                     break
                 break
+
+    def _handle_action_pipe(self):
+        while True:
+            try:
+                data = os.read(self.action_r, 512)
+                if not data:
+                    break
+                self.action_buf += data
+            except OSError as e:
+                if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
+                    break
+                break
+        while b"\n" in self.action_buf:
+            line, self.action_buf = self.action_buf.split(b"\n", 1)
+            raw_line = line.decode("utf-8", errors="ignore").strip()
+            if raw_line.startswith("combo:"):
+                parts = raw_line.split(":", 4)
+                if len(parts) == 5:
+                    _, c_flag, a_flag, s_flag, k_spec = parts
+                    self.perform_key_combo(
+                        k_spec,
+                        ctrl=(c_flag == "1"),
+                        alt=(a_flag == "1"),
+                        shift=(s_flag == "1"),
+                    )
+                continue
+            if raw_line.startswith("gyro:"):
+                parts = raw_line.split(":", 3)
+                if len(parts) == 4:
+                    _, en_s, sens_s, gmode_s = parts
+                    self.gyro_enabled = (en_s == "1")
+                    try:
+                        self.gyro_sens = max(0.5, min(12.0, float(sens_s)))
+                    except ValueError:
+                        pass
+                    if gmode_s in ("lt_hold", "always"):
+                        self.gyro_mode = gmode_s
+                    if not self._needs_gyro_tick():
+                        self._set_gyro_hw_active(False)
+                    self._save_gyro_config()
+                continue
+            act = raw_line.lower()
+            if act in ("copy", "paste", "cut", "select-all", "undo"):
+                self.perform_clipboard_action(act)
+            elif act == "toggle-osk":
+                self.toggle_osk()
+            elif act in ("toggle", "toggle-mode"):
+                self.toggle_mode()
+            elif act == "toggle-gyro":
+                self.toggle_gyro_aim()
+            elif act == "reload-gyro":
+                self._load_gyro_config()
+                if not self._needs_gyro_tick():
+                    self._set_gyro_hw_active(False)
+            elif act in ("center", "toggle-center"):
+                self.toggle_center()
+            elif act in ("overview", "toggle-overview"):
+                self.toggle_overview()
+            elif act == "quick-settings":
+                self.toggle_quick_settings()
 
     def _read_mcu_det_fd(self, fd):
         saw_real_activity = False
@@ -1575,6 +2310,8 @@ class MSIClawDaemon:
     def run(self):
         last_tick = time.monotonic()
         analog_active = False
+        last_gyro_tick = time.monotonic()
+        gyro_tick_active = False
 
         # Ensure MCU starts in XINPUT (0x01), open auxiliary/face devices, and sync state
         self.ensure_mcu_xinput(force=True)
@@ -1582,7 +2319,7 @@ class MSIClawDaemon:
         self.sync_dock_state(notify=False)
         self.handle_external_cmd(unlink_empty=True)
         self.open_controller()
-        if GLib is not None:
+        if self._desktop_type() == "gnome" and GLib is not None:
             try:
                 self._call_claw("SetControllerMode", GLib.Variant("(s)", (self.mode,)))
             except Exception:
@@ -1606,7 +2343,7 @@ class MSIClawDaemon:
                         if self.ctrl_fd is None:
                             self.open_controller()
 
-            watch_fds = [self.sig_r, self.wake_r]
+            watch_fds = [self.sig_r, self.wake_r, self.action_r]
             if self.inotify_fd is not None:
                 watch_fds.append(self.inotify_fd)
             if self.uevent_sock is not None:
@@ -1632,6 +2369,8 @@ class MSIClawDaemon:
                         self._handle_signals()
                     if self.wake_r in rlist:
                         self._handle_wake_pipe()
+                    if self.action_r in rlist:
+                        self._handle_action_pipe()
                     if self.inotify_fd is not None and self.inotify_fd in rlist:
                         if self._drain_inotify():
                             self.handle_external_cmd(unlink_empty=True)
@@ -1661,6 +2400,18 @@ class MSIClawDaemon:
             else:
                 analog_active = False
 
+            if self._needs_gyro_tick():
+                if not gyro_tick_active:
+                    gyro_tick_active = True
+                    last_gyro_tick = time.monotonic()
+                    self.tick_gyro(0.010)
+                g_wait = max(0.001, 0.010 - (time.monotonic() - last_gyro_tick))
+                timeout = g_wait if timeout is None else min(timeout, g_wait)
+            else:
+                if gyro_tick_active or self.gyro_active:
+                    self._set_gyro_hw_active(False)
+                gyro_tick_active = False
+
             if self.wake_deadlines:
                 next_wake = max(0.005, self.wake_deadlines[0] - time.monotonic())
                 timeout = next_wake if timeout is None else min(timeout, next_wake)
@@ -1685,6 +2436,9 @@ class MSIClawDaemon:
 
             if self.wake_r in rlist:
                 self._handle_wake_pipe()
+
+            if self.action_r in rlist:
+                self._handle_action_pipe()
 
             if self.inotify_fd is not None and self.inotify_fd in rlist:
                 if self._drain_inotify():
@@ -1734,6 +2488,23 @@ class MSIClawDaemon:
             else:
                 analog_active = False
 
+            if self._needs_gyro_tick():
+                now = time.monotonic()
+                if not gyro_tick_active:
+                    gyro_tick_active = True
+                    last_gyro_tick = now
+                    self.tick_gyro(0.010)
+                else:
+                    g_dt = min(0.05, now - last_gyro_tick)
+                    if g_dt >= 0.008:
+                        last_gyro_tick = now
+                        self.tick_gyro(g_dt)
+            else:
+                if gyro_tick_active or self.gyro_active:
+                    self._set_gyro_hw_active(False)
+                gyro_tick_active = False
+
+        self._set_gyro_hw_active(False)
         self.close_controller()
         self.close_aux_devices()
         if self.uevent_sock is not None:
@@ -1748,7 +2519,7 @@ class MSIClawDaemon:
             except OSError:
                 pass
             self.inotify_fd = None
-        for fd_attr in ("sig_r", "sig_w", "wake_r", "wake_w"):
+        for fd_attr in ("sig_r", "sig_w", "wake_r", "wake_w", "action_r", "action_w"):
             fd = getattr(self, fd_attr, None)
             if fd is not None:
                 try:
