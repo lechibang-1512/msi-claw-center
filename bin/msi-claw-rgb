@@ -11,102 +11,14 @@ Usage:
   msi-claw-rgb <r> <g> <b> [0-100]  # Custom RGB (0-255) & brightness (0-100)
 """
 
-import glob
-import os
-import select
+from pathlib import Path
 import sys
 
-CLAW_PIDS = ("00001901", "00001902", "00001903", "00001904")
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-
-def find_claw_hidraw():
-    for sys_dir in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
-        try:
-            ue = open(os.path.join(sys_dir, "device/uevent")).read().upper()
-        except OSError:
-            continue
-        if "0DB0:" not in ue or not any(p in ue for p in CLAW_PIDS):
-            continue
-        try:
-            rdesc = open(os.path.join(sys_dir, "device/report_descriptor"), "rb").read(4)
-            if rdesc.startswith(b"\x06\xa0\xff"):
-                return sys_dir, "/dev/" + os.path.basename(sys_dir)
-        except OSError:
-            pass
-        real_dev = os.path.realpath(os.path.join(sys_dir, "device"))
-        if "/INPUT1\n" in ue or ":1.1/" in real_dev or real_dev.endswith(":1.1"):
-            return sys_dir, "/dev/" + os.path.basename(sys_dir)
-    return None, None
-
-
-def get_rgb_addr(sys_dir):
-    d = os.path.realpath(os.path.join(sys_dir, "device"))
-    while d != "/" and not os.path.exists(os.path.join(d, "bcdDevice")):
-        d = os.path.dirname(d)
-    bcd_file = os.path.join(d, "bcdDevice")
-    if os.path.exists(bcd_file):
-        bcd = int(open(bcd_file).read().strip(), 16)
-        major, minor = bcd >> 8, bcd & 0xFF
-        if (major == 1 and minor >= 0x66) or (major == 2 and minor >= 0x17) or major >= 3:
-            return 0x024A
-        return 0x01FA
-    return 0x024A
-
-
-def set_rgb(r, g, b, brightness=100):
-    sys_dir, dev_path = find_claw_hidraw()
-    if not dev_path:
-        print("MSI Claw controller hidraw interface not found.", file=sys.stderr)
-        return 1
-    try:
-        fd = os.open(dev_path, os.O_RDWR | os.O_NONBLOCK)
-    except PermissionError:
-        print(
-            f"Permission denied on {dev_path}. Run /usr/local/sbin/msi-claw-system-power-setup.sh once to grant uaccess.",
-            file=sys.stderr,
-        )
-        return 2
-    try:
-        addr = get_rgb_addr(sys_dir)
-        b_clamped = max(0, min(100, int(brightness)))
-        r_c, g_c, b_c = (max(0, min(255, int(v))) for v in (r, g, b))
-        body = bytes([0x01, addr >> 8, addr & 0xFF, 0x24, 0x00, 1, 0x09, 0, b_clamped])
-        pkt = (bytes([0x0F, 0, 0, 0x3C, 0x21]) + body + bytes([r_c, g_c, b_c]) * 9).ljust(64, b"\x00")
-        while True:
-            try:
-                if not os.read(fd, 64):
-                    break
-            except BlockingIOError:
-                break
-        os.write(fd, pkt)
-        rlist, _, _ = select.select([fd], [], [], 0.04)
-        if rlist:
-            while True:
-                try:
-                    if not os.read(fd, 64):
-                        break
-                except BlockingIOError:
-                    break
-    finally:
-        os.close(fd)
-    return 0
-
-
-def main():
-    args = sys.argv[1:]
-    cmd = args[0].lower() if args else "status"
-    if cmd == "off":
-        sys.exit(set_rgb(0, 0, 0, 0))
-    elif cmd == "dim":
-        sys.exit(set_rgb(0, 150, 255, 15))
-    elif cmd in ("on", "full"):
-        sys.exit(set_rgb(255, 35, 35, 75))
-    elif len(args) >= 3:
-        br = int(args[3]) if len(args) >= 4 else 60
-        sys.exit(set_rgb(int(args[0]), int(args[1]), int(args[2]), br))
-    else:
-        print(__doc__.strip())
-        sys.exit(0)
+from msiclaw.rgb import main
 
 
 if __name__ == "__main__":

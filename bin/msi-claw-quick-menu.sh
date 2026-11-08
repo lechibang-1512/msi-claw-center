@@ -60,17 +60,18 @@ wifi_submenu() {
   choice=$(
     {
       if [[ "${wifi_radio}" == "enabled" ]]; then
-        echo "📴  Turn Wi-Fi Off"
-        echo "🔄  Rescan & List Networks"
+        echo "[OFF]  Turn Wi-Fi Off"
+        echo "[SCAN] Rescan & List Networks"
         nmcli -t -f IN-USE,SIGNAL,SECURITY,SSID dev wifi list --rescan no 2>/dev/null | \
-          awk -F: 'NF>=4 && $4!="" { mark=($1=="*" ? "✓ " : "  "); printf "%s[%3s%%] %s (%s)\n", mark, $2, $4, ($3==""?"Open":$3) }'
+          awk -F: 'NF>=4 && $4!="" { mark=($1=="*" ? "* " : "  "); printf "%s[%3s%%] %s (%s)\n", mark, $2, $4, ($3==""?"Open":$3) }'
       else
-        echo "📶  Turn Wi-Fi On"
+        echo "[ON]   Turn Wi-Fi On"
       fi
-    } | fuzzel --dmenu --prompt="Wi-Fi ❯ " --width=48 --lines=10
+      echo "[BACK] Cancel"
+    } | fuzzel --no-icons --dmenu --prompt="Wi-Fi > " --width=48 --lines=11
   )
   case "${choice}" in
-    "") return ;;
+    ""|*"[BACK]"*) return ;;
     *"Turn Wi-Fi Off"*) nmcli radio wifi off ;;
     *"Turn Wi-Fi On"*) nmcli radio wifi on ;;
     *"Rescan"*) nmcli dev wifi rescan >/dev/null 2>&1 || true; exec "$0" ;;
@@ -80,7 +81,7 @@ wifi_submenu() {
         if ! nmcli dev wifi connect "${ssid}" >/dev/null 2>&1; then
           # Show OSK on overlay layer above fuzzel password prompt
           "${OSK_HELPER}" --show >/dev/null 2>&1 || true
-          pass=$(fuzzel --dmenu --password --prompt="Password (${ssid}) ❯ " --width=46 --lines=0)
+          pass=$(fuzzel --no-icons --dmenu --password --prompt="Password (${ssid}) > " --width=46 --lines=0)
           "${OSK_HELPER}" --hide >/dev/null 2>&1 || true
           [[ -n "${pass}" ]] && nmcli dev wifi connect "${ssid}" password "${pass}" >/dev/null 2>&1 || true
         fi
@@ -94,20 +95,21 @@ bt_submenu() {
   choice=$(
     {
       if [[ "${bt_pow}" == "yes" ]]; then
-        echo "📴  Turn Bluetooth Off"
+        echo "[OFF]  Turn Bluetooth Off"
         bluetoothctl devices Paired 2>/dev/null | while read -r _ mac name; do
           [[ -z "${mac}" ]] && continue
           info=$(bluetoothctl info "${mac}" 2>/dev/null)
           [[ "${info}" == *"Connected: yes"* ]] && st="Connected" || st="Paired"
-          echo "🎧  ${name} [${st}] (${mac})"
+          echo "[DEV]  ${name} [${st}] (${mac})"
         done
       else
-        echo "🔵  Turn Bluetooth On"
+        echo "[ON]   Turn Bluetooth On"
       fi
-    } | fuzzel --dmenu --prompt="Bluetooth ❯ " --width=48 --lines=8
+      echo "[BACK] Cancel"
+    } | fuzzel --no-icons --dmenu --prompt="Bluetooth > " --width=48 --lines=9
   )
   case "${choice}" in
-    "") return ;;
+    ""|*"[BACK]"*) return ;;
     *"Turn Bluetooth Off"*) bluetoothctl power off >/dev/null 2>&1 ;;
     *"Turn Bluetooth On"*) bluetoothctl power on >/dev/null 2>&1 ;;
     *"("*)
@@ -122,28 +124,29 @@ bt_submenu() {
 }
 
 selection=$(
-  cat << EOF | fuzzel --dmenu --prompt="Claw (${bat_cap}% ${bat_st}) ❯ " --width=48 --lines=12
-⚡  MSI Claw Center (TDP · Display · RGB)
-🎮  Controller Mode: ${ctrl_mode^^} (Tap to Switch)
-🔋  Power Profile: ${ppd_prof:-balanced} (Switch Mode)
-🖥️  Display: ${CLAW_HZ}Hz · ${CLAW_SCALE}x · VRR ${CLAW_VRR}
-⌨️  Toggle On-Screen Keyboard (wvkbd)
-📶  Wi-Fi: ${wifi_lbl}
-🔵  Bluetooth: ${bt_lbl}
-🔊  Volume: ${vol_lbl}
-🔆  Brightness: ${br_pct}%
-📸  Screenshot (Fullscreen / Region)
-🌙  Sleep (Suspend s2idle)
-🚪  Session & Power (Log Out / Reboot / Shut Down)
+  cat << EOF | fuzzel --no-icons --dmenu --prompt="CLAW (${bat_cap}% ${bat_st}) > " --width=48 --lines=13
+[DECK]    MSI Claw Center (TDP / Display / RGB)
+[MODE]    Controller Mode: ${ctrl_mode^^} (Tap to Switch)
+[POWER]   Power Profile: ${ppd_prof:-balanced} (Switch Mode)
+[DISPLAY] Display: ${CLAW_HZ}Hz | ${CLAW_SCALE}x | VRR ${CLAW_VRR}
+[OSK]     Toggle On-Screen Keyboard (wvkbd)
+[WIFI]    Wi-Fi: ${wifi_lbl}
+[BT]      Bluetooth: ${bt_lbl}
+[AUDIO]   Volume: ${vol_lbl}
+[LIGHT]   Brightness: ${br_pct}%
+[SHOT]    Screenshot (Fullscreen / Region)
+[SLEEP]   Sleep (Suspend s2idle)
+[SESSION] Session & Power (Log Out / Reboot / Shut Down)
+[EXIT]    Close Menu
 EOF
 )
 
 case "${selection}" in
-  "") exit 0 ;;
+  ""|*"[EXIT]"*) exit 0 ;;
   *"MSI Claw Center"*) ~/.local/bin/msi-claw-center --toggle >/dev/null 2>&1 & ;;
   *"Controller Mode"*) "${ACTION_HELPER}" toggle-mode ;;
   *"Power Profile:"*)
-    pprof=$(printf "🚀  Performance (Max TDP)\n⚖️  Balanced (Auto TDP)\n🍃  Power Saver (Battery Saver)\n" | fuzzel --dmenu --prompt="Power Profile ❯ " --width=36 --lines=3)
+    pprof=$(printf "Performance (Max TDP)\nBalanced (Auto TDP)\nPower Saver (Battery Saver)\n[BACK] Cancel\n" | fuzzel --no-icons --dmenu --prompt="Power Profile > " --width=36 --lines=4)
     case "${pprof}" in
       *Performance*) "${OSD_HELPER}" power-profile performance ;;
       *Balanced*)    "${OSD_HELPER}" power-profile balanced ;;
@@ -151,7 +154,7 @@ case "${selection}" in
     esac
     ;;
   *"Display:"*)
-    dchoice=$(printf "🚀  120Hz Smooth + VRR (1.5x Handheld)\n🔋  60Hz Battery Saver + VRR (1.5x Handheld)\n🔍  120Hz Compact (1.25x Scale)\n🔎  120Hz Large Touch (1.75x Scale)\n" | fuzzel --dmenu --prompt="Display ❯ " --width=44 --lines=4)
+    dchoice=$(printf "120Hz Smooth + VRR (1.5x Handheld)\n60Hz Battery Saver + VRR (1.5x Handheld)\n120Hz Compact (1.25x Scale)\n120Hz Large Touch (1.75x Scale)\n[BACK] Cancel\n" | fuzzel --no-icons --dmenu --prompt="Display > " --width=44 --lines=5)
     case "${dchoice}" in
       *"120Hz Smooth"*)
         printf 'CLAW_RES="1920x1080"\nCLAW_HZ="120"\nCLAW_SCALE="1.5"\nCLAW_VRR="enabled"\n' > "${STATE_FILE}"
@@ -175,7 +178,7 @@ case "${selection}" in
   *"Wi-Fi:"*) wifi_submenu ;;
   *"Bluetooth:"*) bt_submenu ;;
   *"Volume:"*)
-    vchoice=$(printf "🔊  Volume 100%%\n🔊  Volume 75%%\n🔉  Volume 50%%\n🔈  Volume 25%%\n🔇  Toggle Mute\n" | fuzzel --dmenu --prompt="Volume ❯ " --width=32 --lines=5)
+    vchoice=$(printf "Volume 100%%\nVolume 75%%\nVolume 50%%\nVolume 25%%\nToggle Mute\n[BACK] Cancel\n" | fuzzel --no-icons --dmenu --prompt="Volume > " --width=32 --lines=6)
     case "${vchoice}" in
       *100%*) wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume @DEFAULT_AUDIO_SINK@ 1.0 ;;
       *75%*)  wpctl set-mute @DEFAULT_AUDIO_SINK@ 0; wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.75 ;;
@@ -185,16 +188,18 @@ case "${selection}" in
     esac
     ;;
   *"Brightness:"*)
-    bchoice=$(printf "🔆  100%%\n🔆  75%%\n🔆  50%%\n🔆  25%%\n🔅  10%%\n" | fuzzel --dmenu --prompt="Brightness ❯ " --width=30 --lines=5)
-    bpct=$( grep -oE '[0-9]+' <<< "${bchoice}" || true )
-    if [[ -n "${bpct}" ]]; then
-      max_b=$(cat /sys/class/backlight/intel_backlight/max_brightness 2>/dev/null || echo 192000)
-      raw=$(( (bpct * max_b + 50) / 100 ))
-      gdbus call --system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1/session/auto --method org.freedesktop.login1.Session.SetBrightness "backlight" "intel_backlight" "${raw}" >/dev/null 2>&1 || true
+    bchoice=$(printf "100%%\n75%%\n50%%\n25%%\n10%%\n[BACK] Cancel\n" | fuzzel --no-icons --dmenu --prompt="Brightness > " --width=30 --lines=6)
+    if [[ "${bchoice}" != *"[BACK]"* ]]; then
+      bpct=$( grep -oE '[0-9]+' <<< "${bchoice}" || true )
+      if [[ -n "${bpct}" ]]; then
+        max_b=$(cat /sys/class/backlight/intel_backlight/max_brightness 2>/dev/null || echo 192000)
+        raw=$(( (bpct * max_b + 50) / 100 ))
+        gdbus call --system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1/session/auto --method org.freedesktop.login1.Session.SetBrightness "backlight" "intel_backlight" "${raw}" >/dev/null 2>&1 || true
+      fi
     fi
     ;;
   *"Screenshot"*)
-    schoice=$(printf "🖥️  Capture Full Screen (Clipboard + Pictures)\n✂️  Select Region (Clipboard + Pictures)\n" | fuzzel --dmenu --prompt="Screenshot ❯ " --width=44 --lines=2)
+    schoice=$(printf "Capture Full Screen (Clipboard + Pictures)\nSelect Region (Clipboard + Pictures)\n[BACK] Cancel\n" | fuzzel --no-icons --dmenu --prompt="Screenshot > " --width=44 --lines=3)
     case "${schoice}" in
       *"Full Screen"*) sleep 0.18 && "${OSD_HELPER}" screenshot & ;;
       *"Select Region"*) sleep 0.18 && "${OSD_HELPER}" screenshot-region & ;;
@@ -202,7 +207,7 @@ case "${selection}" in
     ;;
   *"Sleep"*) systemctl suspend ;;
   *"Session & Power"*)
-    pchoice=$(printf "🚪  Log Out of labwc (Back to Session Picker)\n🔄  Reboot MSI Claw\n⏻  Shut Down MSI Claw\n❌  Cancel\n" | fuzzel --dmenu --prompt="Session & Power ❯ " --width=44 --lines=4)
+    pchoice=$(printf "Log Out of labwc (Back to Session Picker)\nReboot MSI Claw\nShut Down MSI Claw\nCancel\n" | fuzzel --no-icons --dmenu --prompt="Session & Power > " --width=44 --lines=4)
     case "${pchoice}" in
       *"Log Out"*) labwc --exit ;;
       *"Reboot"*) systemctl reboot ;;

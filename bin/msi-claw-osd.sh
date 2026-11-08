@@ -5,7 +5,7 @@ set -u
 send_osd() {
   local title="$1"
   local body="$2"
-  local icon="${3:-preferences-system-symbolic}"
+  local _unused_icon="${3:-}"
   local val="${4:-}"
   local hints="{'x-canonical-private-synchronous': <'msi-claw-osd'>}"
   if [[ -n "${val}" ]]; then
@@ -15,7 +15,7 @@ send_osd() {
     --dest org.freedesktop.Notifications \
     --object-path /org/freedesktop/Notifications \
     --method org.freedesktop.Notifications.Notify \
-    "MSI Claw OSD" 0 "${icon}" "${title}" "${body}" \
+    "MSI Claw OSD" 0 "" "${title}" "${body}" \
     "[]" "${hints}" 1600 >/dev/null 2>&1 || true
 }
 

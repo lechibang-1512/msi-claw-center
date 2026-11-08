@@ -225,6 +225,7 @@ max_freq_khz=1400000
 /sys/class/drm/card*/gt/gt0/rps_max_freq_mhz=1400
 /sys/class/drm/card*/gt/gt1/rps_boost_freq_mhz=700
 /sys/class/drm/card*/device/tile0/gt0/freq0/max_freq=1400
+/sys/class/drm/card*/device/tile0/gt0/freq0/power_profile=power_saving
 /sys/class/drm/card*/device/tile0/gt1/freq0/max_freq=700
 
 [sysctl]
@@ -265,6 +266,7 @@ max_freq_khz=1800000
 /sys/class/drm/card*/gt/gt0/rps_max_freq_mhz=2150
 /sys/class/drm/card*/gt/gt1/rps_boost_freq_mhz=1100
 /sys/class/drm/card*/device/tile0/gt0/freq0/max_freq=2150
+/sys/class/drm/card*/device/tile0/gt0/freq0/power_profile=base
 /sys/class/drm/card*/device/tile0/gt1/freq0/max_freq=1100
 
 [sysctl]
@@ -303,6 +305,7 @@ max_freq_khz=1600000
 /sys/class/drm/card*/gt/gt0/rps_max_freq_mhz=2000
 /sys/class/drm/card*/gt/gt1/rps_boost_freq_mhz=1000
 /sys/class/drm/card*/device/tile0/gt0/freq0/max_freq=2000
+/sys/class/drm/card*/device/tile0/gt0/freq0/power_profile=power_saving
 /sys/class/drm/card*/device/tile0/gt1/freq0/max_freq=1000
 
 [sysctl]
@@ -342,6 +345,7 @@ max_freq_khz=2400000
 /sys/class/drm/card*/gt/gt0/rps_max_freq_mhz=2250
 /sys/class/drm/card*/gt/gt1/rps_boost_freq_mhz=1200
 /sys/class/drm/card*/device/tile0/gt0/freq0/max_freq=2250
+/sys/class/drm/card*/device/tile0/gt0/freq0/power_profile=base
 /sys/class/drm/card*/device/tile0/gt1/freq0/max_freq=1200
 
 [sysctl]
@@ -381,6 +385,7 @@ max_freq_khz=2600000
 /sys/class/drm/card*/gt/gt0/rps_max_freq_mhz=2250
 /sys/class/drm/card*/gt/gt1/rps_boost_freq_mhz=1300
 /sys/class/drm/card*/device/tile0/gt0/freq0/max_freq=2250
+/sys/class/drm/card*/device/tile0/gt0/freq0/power_profile=base
 /sys/class/drm/card*/device/tile0/gt1/freq0/max_freq=1300
 
 [sysctl]
@@ -660,7 +665,17 @@ fi
 if [[ "${1:-}" == "--scx" ]]; then
     mode="${2:-auto}"
     if [[ "$mode" == "off" ]]; then
-        scxctl stop 2>/dev/null || true
+        if command -v scxcli >/dev/null 2>&1; then
+            scxcli stop 2>/dev/null || true
+        else
+            scxctl stop 2>/dev/null || true
+        fi
+    elif command -v scxcli >/dev/null 2>&1; then
+        if [[ "$mode" == "gaming" ]]; then
+            scxcli run scx_lavd --performance 2>/dev/null || scxcli start scx_lavd 2>/dev/null || true
+        else
+            scxcli start scx_lavd 2>/dev/null || true
+        fi
     elif command -v scxctl >/dev/null 2>&1; then
         scxctl switch --sched scx_lavd --mode "$mode" 2>/dev/null || \
             scxctl start --sched scx_lavd --mode "$mode" 2>/dev/null || true

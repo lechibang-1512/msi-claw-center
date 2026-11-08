@@ -13,6 +13,7 @@ import glob
 import json
 import math
 import os
+from pathlib import Path
 import select
 import signal
 import socket
@@ -21,6 +22,11 @@ import subprocess
 import sys
 import threading
 import time
+
+# Ensure project root is in sys.path when running via symlink or directly
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 try:
     from gi.repository import Gio, GLib
@@ -39,223 +45,94 @@ libc.inotify_init1.restype = ctypes.c_int
 libc.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
 libc.inotify_add_watch.restype = ctypes.c_int
 
-# Linux input / uinput constants
-UI_SET_EVBIT = 0x40045564
-UI_SET_KEYBIT = 0x40045565
-UI_SET_RELBIT = 0x40045566
-UI_SET_ABSBIT = 0x40045567
-UI_SET_PROPBIT = 0x4004556E
-UI_DEV_SETUP = 0x405C5503
-UI_ABS_SETUP = 0x401C5504
-UI_DEV_CREATE = 0x5501
-UI_DEV_DESTROY = 0x5502
-EVIOCGRAB = 0x40044590
-
-EV_SYN = 0x00
-EV_KEY = 0x01
-EV_REL = 0x02
-EV_ABS = 0x03
-
-SYN_REPORT = 0x00
-
-# Relative axes
-REL_X = 0x00
-REL_Y = 0x01
-REL_HWHEEL = 0x06
-REL_WHEEL = 0x08
-REL_WHEEL_HI_RES = 0x0B
-REL_HWHEEL_HI_RES = 0x0C
-
-# Absolute axes (Gamepad & Touch)
-ABS_X = 0x00
-ABS_Y = 0x01
-ABS_Z = 0x02     # LT (0..255)
-ABS_RX = 0x03
-ABS_RY = 0x04
-ABS_RZ = 0x05    # RT (0..255)
-ABS_HAT0X = 0x10 # D-Pad X (-1, 0, 1)
-ABS_HAT0Y = 0x11 # D-Pad Y (-1, 0, 1)
-
-ABS_MT_SLOT = 0x2F
-ABS_MT_POSITION_X = 0x35
-ABS_MT_POSITION_Y = 0x36
-ABS_MT_TRACKING_ID = 0x39
-
-# Mouse & Touch buttons
-BTN_LEFT = 0x110
-BTN_RIGHT = 0x111
-BTN_MIDDLE = 0x112
-BTN_SIDE = 0x113
-BTN_EXTRA = 0x114
-BTN_TOUCH = 0x14A
-
-# Gamepad buttons (Xbox 360 layout on MSI Claw A1M 0db0:1901)
-BTN_SOUTH = 0x130  # A
-BTN_EAST = 0x131   # B
-BTN_NORTH = 0x133  # X
-BTN_WEST = 0x134   # Y
-BTN_TL = 0x136     # LB
-BTN_TR = 0x137     # RB
-BTN_SELECT = 0x13A # View
-BTN_START = 0x13B  # Menu
-BTN_MODE = 0x13C   # Guide
-BTN_THUMBL = 0x13D # L3
-BTN_THUMBR = 0x13E # R3
-
-# Keyboard keys
-KEY_ESC = 1
-KEY_BACKSPACE = 14
-KEY_TAB = 15
-KEY_LEFTBRACE = 26
-KEY_RIGHTBRACE = 27
-KEY_ENTER = 28
-KEY_LEFTCTRL = 29
-KEY_A = 30
-KEY_LEFTSHIFT = 42
-KEY_Z = 44
-KEY_X = 45
-KEY_C = 46
-KEY_V = 47
-KEY_LEFTALT = 56
-KEY_SPACE = 57
-KEY_F4 = 62
-KEY_SYSRQ = 99
-KEY_UP = 103
-KEY_PAGEUP = 104
-KEY_LEFT = 105
-KEY_RIGHT = 106
-KEY_DOWN = 108
-KEY_PAGEDOWN = 109
-KEY_INSERT = 110
-KEY_DELETE = 111
-KEY_MUTE = 113
-KEY_VOLUMEDOWN = 114
-KEY_VOLUMEUP = 115
-KEY_LEFTMETA = 125
-KEY_BACK = 158
-KEY_FORWARD = 159
-KEY_F15 = 185
-KEY_F16 = 186
-KEY_BRIGHTNESSDOWN = 224
-KEY_BRIGHTNESSUP = 225
-
-CLAW_PIDS = ("00001901", "00001902", "00001903", "00001904")
-CLAW_READ_MODE = bytes([0x0F, 0x00, 0x00, 0x3C, 0x26]).ljust(64, b"\x00")
-
-# MSI Claw MCU M1/M2 macro software intercept codes on event5 (KEY_RIGHTBRACE=27, KEY_LEFTBRACE=26)
-MCU_M1_SW_CODE = 0x59
-MCU_M2_SW_CODE = 0x58
-
-HW_MKEY_CODES = {
-    "hw:ABS_HAT0Y_UP": 0x01,
-    "hw:ABS_HAT0Y_DOWN": 0x02,
-    "hw:ABS_HAT0X_LEFT": 0x03,
-    "hw:ABS_HAT0X_RIGHT": 0x04,
-    "hw:BTN_TL": 0x05,
-    "hw:BTN_TR": 0x06,
-    "hw:BTN_THUMBL": 0x07,
-    "hw:BTN_THUMBR": 0x08,
-    "hw:BTN_SOUTH": 0x09,
-    "hw:BTN_EAST": 0x0A,
-    "hw:BTN_NORTH": 0x0B,
-    "hw:BTN_WEST": 0x0C,
-    "hw:BTN_MODE": 0x0D,
-    "hw:BTN_SELECT": 0x0E,
-    "hw:BTN_START": 0x0F,
-    "hw:BTN_TL2": 0x13,
-    "hw:BTN_TR2": 0x14,
-}
-
-DEFAULT_KEY_BINDINGS = {
-    "view_desktop": "esc",
-    "menu_desktop": "alt-tab",
-    "f16_tap": "toggle-center",
-    "f16_chord": "overview",
-    "f15_tap": "quick-settings",
-    "f15_chord": "toggle-osk",
-    "m1_desktop": "toggle-osk",
-    "m2_desktop": "enter",
-    "m1_gamepad": "gyro-hold",
-    "m2_gamepad": "toggle-osk",
-    "m1_chord": "screenshot",
-    "m2_chord": "toggle-gyro",
-    "a_desktop": "mouse-left",
-    "b_desktop": "mouse-right",
-    "x_desktop": "toggle-osk",
-    "y_desktop": "overview",
-}
-
-EVENT_STRUCT = struct.Struct("<qqHHi")
-
-
-class UInputDevice:
-    def __init__(self, name, product_id, ev_bits, key_bits=(), rel_bits=(), abs_axes=(), prop_bits=()):
-        for attempt in range(20):
-            try:
-                self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
-                break
-            except (PermissionError, FileNotFoundError):
-                if attempt == 19:
-                    raise
-                time.sleep(0.5)
-        for ev in ev_bits:
-            fcntl.ioctl(self.fd, UI_SET_EVBIT, ev)
-        for k in key_bits:
-            fcntl.ioctl(self.fd, UI_SET_KEYBIT, k)
-        for r in rel_bits:
-            fcntl.ioctl(self.fd, UI_SET_RELBIT, r)
-        for p in prop_bits:
-            fcntl.ioctl(self.fd, UI_SET_PROPBIT, p)
-        for axis, min_v, max_v in abs_axes:
-            fcntl.ioctl(self.fd, UI_SET_ABSBIT, axis)
-            abs_setup = struct.pack("<Hxxiiiiii", axis, 0, min_v, max_v, 0, 0, 0)
-            fcntl.ioctl(self.fd, UI_ABS_SETUP, abs_setup)
-
-        setup = struct.pack("<HHHH80sI", 0x03, 0x0DB0, product_id, 1, name.encode("utf-8"), 0)
-        fcntl.ioctl(self.fd, UI_DEV_SETUP, setup)
-        fcntl.ioctl(self.fd, UI_DEV_CREATE)
-
-    def emit(self, ev_type, code, val):
-        os.write(self.fd, EVENT_STRUCT.pack(0, 0, ev_type, code, int(val)))
-
-    def syn(self):
-        self.emit(EV_SYN, SYN_REPORT, 0)
-
-    def key(self, code, val):
-        self.emit(EV_KEY, code, val)
-        self.syn()
-
-    def tap_key(self, code):
-        self.emit(EV_KEY, code, 1)
-        self.syn()
-        time.sleep(0.015)
-        self.emit(EV_KEY, code, 0)
-        self.syn()
-
-    def tap_combo(self, modifiers, key_code):
-        for m in modifiers:
-            self.emit(EV_KEY, m, 1)
-        self.syn()
-        time.sleep(0.015)
-        self.emit(EV_KEY, key_code, 1)
-        self.syn()
-        time.sleep(0.02)
-        self.emit(EV_KEY, key_code, 0)
-        for m in reversed(modifiers):
-            self.emit(EV_KEY, m, 0)
-        self.syn()
-
-    def close(self):
-        if self.fd is not None:
-            try:
-                fcntl.ioctl(self.fd, UI_DEV_DESTROY)
-            except OSError:
-                pass
-            try:
-                os.close(self.fd)
-            except OSError:
-                pass
-            self.fd = None
+from msiclaw.constants import (
+    CLAW_PIDS,
+    CLAW_READ_MODE,
+    DEFAULT_KEY_BINDINGS,
+    HW_MKEY_CODES,
+    MCU_M1_SW_CODE,
+    MCU_M2_SW_CODE,
+)
+from msiclaw.input.uinput import (
+    ABS_HAT0X,
+    ABS_HAT0Y,
+    ABS_MT_POSITION_X,
+    ABS_MT_POSITION_Y,
+    ABS_MT_SLOT,
+    ABS_MT_TRACKING_ID,
+    ABS_RX,
+    ABS_RY,
+    ABS_RZ,
+    ABS_X,
+    ABS_Y,
+    ABS_Z,
+    BTN_EAST,
+    BTN_EXTRA,
+    BTN_LEFT,
+    BTN_MIDDLE,
+    BTN_MODE,
+    BTN_NORTH,
+    BTN_RIGHT,
+    BTN_SELECT,
+    BTN_SIDE,
+    BTN_SOUTH,
+    BTN_START,
+    BTN_THUMBL,
+    BTN_THUMBR,
+    BTN_TL,
+    BTN_TOUCH,
+    BTN_TR,
+    BTN_WEST,
+    EVENT_STRUCT,
+    EVIOCGRAB,
+    EV_ABS,
+    EV_KEY,
+    EV_REL,
+    EV_SYN,
+    KEY_A,
+    KEY_BACK,
+    KEY_BACKSPACE,
+    KEY_BRIGHTNESSDOWN,
+    KEY_BRIGHTNESSUP,
+    KEY_C,
+    KEY_DELETE,
+    KEY_DOWN,
+    KEY_ENTER,
+    KEY_ESC,
+    KEY_F15,
+    KEY_F16,
+    KEY_F4,
+    KEY_FORWARD,
+    KEY_INSERT,
+    KEY_LEFT,
+    KEY_LEFTALT,
+    KEY_LEFTBRACE,
+    KEY_LEFTCTRL,
+    KEY_LEFTMETA,
+    KEY_LEFTSHIFT,
+    KEY_MUTE,
+    KEY_PAGEDOWN,
+    KEY_PAGEUP,
+    KEY_RIGHT,
+    KEY_RIGHTBRACE,
+    KEY_SPACE,
+    KEY_SYSRQ,
+    KEY_TAB,
+    KEY_UP,
+    KEY_V,
+    KEY_VOLUMEDOWN,
+    KEY_VOLUMEUP,
+    KEY_X,
+    KEY_Z,
+    REL_HWHEEL,
+    REL_HWHEEL_HI_RES,
+    REL_WHEEL,
+    REL_WHEEL_HI_RES,
+    REL_X,
+    REL_Y,
+    SYN_REPORT,
+    UInputDevice,
+)
 
 
 class MSIClawDaemon:
@@ -264,6 +141,7 @@ class MSIClawDaemon:
         self.mode = "desktop"  # "desktop" or "gamepad"
         self.osk_open = False
         self.last_right_face_time = 0.0
+        self.last_mode_toggle_time = 0.0
 
         # Virtual Mouse
         self.vmouse = UInputDevice(
@@ -405,6 +283,9 @@ class MSIClawDaemon:
         self.cmd_file = os.path.join(runtime_dir, "msi-claw-cmd")
         self.state_file = f"/dev/shm/msi-claw-mode-{os.getuid()}"
         self.dock_state_file = f"/dev/shm/msi-claw-dock-{os.getuid()}"
+        self.overlay_state_file = f"/dev/shm/msi-claw-overlay-{os.getuid()}"
+        self._overlay_pointer_mode = False
+        self._overlay_enter_held = False
         self.is_docked = None
         self.dock_label = "handheld"
         self.dock_check_deadline = 0.0
@@ -808,6 +689,30 @@ class MSIClawDaemon:
                 self.sync_mcu_mkeys(force=True)
 
     def sync_face_keybindings(self):
+        # On KDE Plasma, ensure KWin ExposeAll shortcut doesn't capture Launch (C) (F16)
+        if self._desktop_type() == "kde" and os.path.exists("/usr/bin/kreadconfig6") and os.path.exists("/usr/bin/kwriteconfig6"):
+            try:
+                cur_expose = subprocess.check_output(
+                    ["/usr/bin/kreadconfig6", "--file", "kglobalshortcutsrc", "--group", "kwin", "--key", "ExposeAll"],
+                    text=True,
+                ).strip()
+                if "Launch (C)" in cur_expose:
+                    new_expose = cur_expose.replace("Launch (C)\t", "").replace("Launch (C)", "")
+                    subprocess.run(
+                        ["/usr/bin/kwriteconfig6", "--file", "kglobalshortcutsrc", "--group", "kwin", "--key", "ExposeAll", new_expose],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    subprocess.run(
+                        ["qdbus-qt6", "org.kde.KWin", "/KWin", "reconfigure"],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+            except Exception:
+                pass
+
         # When event4 (AT Translated Set 2 keyboard) is passively monitored in evdev,
         # unbind custom0/custom1 so gsd-media-keys neither double-fires nor fails grab.
         # Otherwise bind XF86Launch7 (KEY_F16) and XF86Launch6 (KEY_F15), which pc105+inet produces.
@@ -1083,6 +988,9 @@ class MSIClawDaemon:
             self.vkbd.key(k, 0)
         self.alt_tab_active = False
         self.rt_clicked = False
+        if self._overlay_enter_held:
+            self.vkbd.key(KEY_ENTER, 0)
+            self._overlay_enter_held = False
         self.lx = self.ly = self.rx = self.ry = 0
         self.lt = self.rt = 0
         self.hat_x = self.hat_y = 0
@@ -1209,13 +1117,40 @@ class MSIClawDaemon:
             self._set_gyro_hw_active(False)
         self._save_gyro_config()
         state_txt = f"ON (Hold LT · {self.gyro_sens:.1f}x)" if self.gyro_enabled else "OFF"
-        self.notify_user("MSI Claw Gyro Aim", f"6-Axis Motion Aim: {state_txt}", "input-gaming-symbolic")
+        self.notify_user("MSI Claw Gyro Aim", f"6-Axis Motion Aim: {state_txt}", "")
         print(f"Gyro Aim toggled -> {state_txt}", flush=True)
+
+    def _is_overlay_active(self):
+        if not os.path.exists(self.overlay_state_file):
+            return False
+        try:
+            pid = int(open(self.overlay_state_file).read().strip())
+            os.kill(pid, 0)
+            return True
+        except (OSError, ValueError) as err:
+            print(f"[_is_overlay_active] unlinking due to {err}", flush=True)
+            try:
+                os.unlink(self.overlay_state_file)
+            except OSError:
+                pass
+            return False
+
+    def _sync_overlay_grab(self):
+        was_grabbed = self.grabbed
+        active = self._is_overlay_active()
+        if active and not was_grabbed:
+            self._overlay_pointer_mode = False
+        elif not active and self._overlay_enter_held:
+            self.vkbd.key(KEY_ENTER, 0)
+            self._overlay_enter_held = False
+        if was_grabbed != ((self.mode == "desktop") or active):
+            self.release_all()
+        self.update_grab()
 
     def update_grab(self):
         if self.ctrl_fd is None:
             return
-        want_grab = (self.mode == "desktop")
+        want_grab = (self.mode == "desktop") or self._is_overlay_active()
         if want_grab and not self.grabbed:
             try:
                 fcntl.ioctl(self.ctrl_fd, EVIOCGRAB, 1)
@@ -1257,7 +1192,7 @@ class MSIClawDaemon:
             None,
         )
 
-    def notify_user(self, title, body, icon="input-gaming-symbolic", critical=False, timeout_ms=2000):
+    def notify_user(self, title, body, icon="", critical=False, timeout_ms=2000):
         if GLib is not None:
             if self._desktop_type() == "gnome":
                 try:
@@ -1314,7 +1249,7 @@ class MSIClawDaemon:
             self.notify_user(
                 "CRITICAL BATTERY — 5%",
                 "Connect USB-C charger immediately (auto-sleep imminent)",
-                "battery-caution-symbolic",
+                "",
                 critical=True,
                 timeout_ms=8000,
             )
@@ -1323,7 +1258,7 @@ class MSIClawDaemon:
             self.notify_user(
                 "Battery Very Low — 10%",
                 "Plug in USB-C power soon to avoid mid-game sleep",
-                "battery-low-symbolic",
+                "",
                 critical=True,
                 timeout_ms=6000,
             )
@@ -1332,7 +1267,7 @@ class MSIClawDaemon:
             self.notify_user(
                 "Battery Low — 20%",
                 "Consider switching to 60Hz or Power Saver (F15)",
-                "battery-low-symbolic",
+                "",
                 critical=False,
                 timeout_ms=3500,
             )
@@ -1340,16 +1275,17 @@ class MSIClawDaemon:
     def set_mode(self, target_mode, notify=True):
         if target_mode not in ("desktop", "gamepad"):
             return
-        if self.mode == target_mode and (self.grabbed == (target_mode == "desktop")):
+        want_grab = (target_mode == "desktop") or self._is_overlay_active()
+        if self.mode == target_mode and (self.grabbed == want_grab):
             return
         self.release_all()
         self.mode = target_mode
         self.update_grab()
         if notify:
             if self.mode == "gamepad":
-                self.notify_user("MSI Claw Mode", "Gamepad Mode (Xbox Controller Active)", "input-gaming-symbolic")
+                self.notify_user("MSI Claw Mode", "Gamepad Mode (Xbox Controller Active)", "")
             else:
-                self.notify_user("MSI Claw Mode", "Desktop Control Mode (Mouse & Keyboard Active)", "input-mouse-symbolic")
+                self.notify_user("MSI Claw Mode", "Desktop Control Mode (Mouse & Keyboard Active)", "")
         if self._desktop_type() == "gnome" and GLib is not None:
             try:
                 self._call_claw("SetControllerMode", GLib.Variant("(s)", (self.mode,)))
@@ -1360,6 +1296,10 @@ class MSIClawDaemon:
         print(f"Switched controller mode to: {self.mode}", flush=True)
 
     def toggle_mode(self):
+        now = time.monotonic()
+        if (now - self.last_mode_toggle_time) < 0.4:
+            return
+        self.last_mode_toggle_time = now
         target = "gamepad" if self.mode == "desktop" else "desktop"
         self.set_mode(target, notify=True)
 
@@ -1594,11 +1534,15 @@ class MSIClawDaemon:
                         "Activate",
                         GLib.Variant("(sava{sv})", ("toggle", [], {})),
                         None,
-                        Gio.DBusCallFlags.NONE,
-                        250,
+                        Gio.DBusCallFlags.NO_AUTO_START,
+                        1000,
                         None,
                     )
                     return
+                except GLib.GError as ge:
+                    msg = str(ge)
+                    if "NameHasNoOwner" not in msg and "ServiceUnknown" not in msg:
+                        return
                 except Exception:
                     pass
             subprocess.Popen(
@@ -1823,6 +1767,8 @@ class MSIClawDaemon:
             self.sync_mcu_mkeys(force=True)
         elif cmd == "toggle-gyro":
             self.toggle_gyro_aim()
+        elif cmd == "overlay-sync":
+            self._sync_overlay_grab()
         elif cmd in ("copy", "paste", "cut", "select-all", "undo"):
             self.perform_clipboard_action(cmd)
 
@@ -2298,13 +2244,13 @@ class MSIClawDaemon:
                 self.notify_user(
                     "Docked / Mini-PC Mode",
                     f"Connected ({detail}) · RGB off & mouse OSK suppressed",
-                    "video-display-symbolic",
+                    "",
                 )
             else:
                 self.notify_user(
                     "Handheld Mode",
                     "Undocked · RGB & thumbstick auto-OSK restored",
-                    "input-gaming-symbolic",
+                    "",
                 )
 
     def _drain_uevents(self):
@@ -2378,7 +2324,107 @@ class MSIClawDaemon:
             elif val < 28:
                 self.gyro_lt_latched = False
 
-        if self.mode != "desktop":
+        # Global View chords active in BOTH Gamepad and Desktop modes
+        if self.view_held:
+            if ev_type == EV_ABS:
+                if code == ABS_HAT0X and val != 0:
+                    self.view_used_as_chord = True
+                    self.vkbd.tap_key(KEY_BRIGHTNESSUP if val > 0 else KEY_BRIGHTNESSDOWN)
+                    return
+                elif code == ABS_HAT0Y and val != 0:
+                    self.view_used_as_chord = True
+                    self.vkbd.tap_key(KEY_VOLUMEUP if val < 0 else KEY_VOLUMEDOWN)
+                    return
+            elif ev_type == EV_KEY and val == 1:
+                if code == BTN_SOUTH:  # View+A -> Paste
+                    self.view_used_as_chord = True
+                    self.perform_clipboard_action("paste")
+                    return
+                elif code == BTN_EAST:  # View+B -> Alt+F4 Close Window
+                    self.view_used_as_chord = True
+                    self.vkbd.tap_combo([KEY_LEFTALT], KEY_F4)
+                    return
+                elif code == BTN_NORTH:  # View+X -> Copy
+                    self.view_used_as_chord = True
+                    self.perform_clipboard_action("copy")
+                    return
+                elif code == BTN_WEST:  # View+Y -> Screenshot
+                    self.view_used_as_chord = True
+                    self.vkbd.tap_key(KEY_SYSRQ)
+                    return
+                elif code == BTN_TL:  # View+LB -> Alt+Shift+Tab
+                    self.view_used_as_chord = True
+                    if not self.alt_tab_active:
+                        self.vkbd.key(KEY_LEFTALT, 1)
+                        self.alt_tab_active = True
+                    self.vkbd.tap_combo([KEY_LEFTSHIFT], KEY_TAB)
+                    return
+                elif code == BTN_TR:  # View+RB -> Alt+Tab
+                    self.view_used_as_chord = True
+                    if not self.alt_tab_active:
+                        self.vkbd.key(KEY_LEFTALT, 1)
+                        self.alt_tab_active = True
+                    self.vkbd.tap_key(KEY_TAB)
+                    return
+
+        overlay_open = self._is_overlay_active()
+        if self.mode != "desktop" and not overlay_open:
+            return
+
+        # Dedicated console-style overlay navigation whenever MSI Claw Center is open
+        if overlay_open:
+            if ev_type == EV_ABS:
+                if code == ABS_X:
+                    self.lx = val
+                    if abs(val) > 5000:
+                        self._overlay_pointer_mode = True
+                elif code == ABS_Y:
+                    self.ly = val
+                    if abs(val) > 5000:
+                        self._overlay_pointer_mode = True
+                elif code == ABS_RX:
+                    self.rx = val
+                elif code == ABS_RY:
+                    self.ry = val
+                elif code == ABS_RZ:
+                    self.rt = val
+                    if val > 120 and not self.rt_clicked:
+                        self.rt_clicked = True
+                        self.vmouse.key(BTN_LEFT, 1)
+                    elif val < 80 and self.rt_clicked:
+                        self.rt_clicked = False
+                        self.vmouse.key(BTN_LEFT, 0)
+                elif code == ABS_HAT0X:
+                    self._overlay_pointer_mode = False
+                    if val != self.hat_x and self.hat_x != 0:
+                        self.vkbd.key(KEY_LEFT if self.hat_x < 0 else KEY_RIGHT, 0)
+                    if val != 0 and val != self.hat_x:
+                        self.vkbd.key(KEY_LEFT if val < 0 else KEY_RIGHT, 1)
+                    self.hat_x = val
+                elif code == ABS_HAT0Y:
+                    self._overlay_pointer_mode = False
+                    if val != self.hat_y and self.hat_y != 0:
+                        self.vkbd.key(KEY_UP if self.hat_y < 0 else KEY_DOWN, 0)
+                    if val != 0 and val != self.hat_y:
+                        self.vkbd.key(KEY_UP if val < 0 else KEY_DOWN, 1)
+                    self.hat_y = val
+            elif ev_type == EV_KEY:
+                if code == BTN_SOUTH:  # A -> Activate focused control (or pointer click if stick moved)
+                    if self._overlay_pointer_mode:
+                        self.vmouse.key(BTN_LEFT, 1 if val else 0)
+                    else:
+                        self._overlay_enter_held = bool(val)
+                        self.vkbd.key(KEY_ENTER, 1 if val else 0)
+                elif code == BTN_EAST and val == 1:  # B -> Close dropdown or hide overlay
+                    self.vkbd.tap_key(KEY_ESC)
+                elif code == BTN_NORTH and val == 1:  # X -> Toggle OSK
+                    self.toggle_osk()
+                elif code == BTN_TL and val == 1:  # LB -> Previous View
+                    self._overlay_pointer_mode = False
+                    self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_PAGEUP)
+                elif code == BTN_TR and val == 1:  # RB -> Next View
+                    self._overlay_pointer_mode = False
+                    self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_PAGEDOWN)
             return
 
         if ev_type == EV_ABS:
@@ -2401,107 +2447,75 @@ class MSIClawDaemon:
                     self.rt_clicked = False
                     self.vmouse.key(BTN_LEFT, 0)
             elif code == ABS_HAT0X:
-                # Always release the previous direction first, so a View chord can't strand an arrow key
+                # Always release the previous direction first
                 if val != self.hat_x and self.hat_x != 0:
                     self.vkbd.key(KEY_LEFT if self.hat_x < 0 else KEY_RIGHT, 0)
-                if self.view_held and val != 0:
-                    self.view_used_as_chord = True
-                    self.vkbd.tap_key(KEY_BRIGHTNESSUP if val > 0 else KEY_BRIGHTNESSDOWN)
-                    val = 0  # chord taps hold nothing
-                elif val != 0 and val != self.hat_x:
+                if val != 0 and val != self.hat_x:
                     self.vkbd.key(KEY_LEFT if val < 0 else KEY_RIGHT, 1)
                 self.hat_x = val
             elif code == ABS_HAT0Y:
                 if val != self.hat_y and self.hat_y != 0:
                     self.vkbd.key(KEY_UP if self.hat_y < 0 else KEY_DOWN, 0)
-                if self.view_held and val != 0:
-                    self.view_used_as_chord = True
-                    self.vkbd.tap_key(KEY_VOLUMEUP if val < 0 else KEY_VOLUMEDOWN)
-                    val = 0
-                elif val != 0 and val != self.hat_y:
+                if val != 0 and val != self.hat_y:
                     self.vkbd.key(KEY_UP if val < 0 else KEY_DOWN, 1)
                 self.hat_y = val
 
         elif ev_type == EV_KEY:
-            if code == BTN_SOUTH:  # A -> Default Left Click (or View+A -> Paste)
+            if code == BTN_SOUTH:  # A -> Default Left Click
                 if val == 0:
                     act = self.abxy_active_action.pop("a", None)
                     if act:
                         self.execute_bound_action(act, pressed=False, tap=False)
                     else:
                         self.vmouse.key(BTN_LEFT, 0)
-                elif self.view_held:
-                    if val == 1:
-                        self.view_used_as_chord = True
-                        self.perform_clipboard_action("paste")
                 elif val == 1:
                     act = self.key_cfg.get("a_desktop", "mouse-left")
                     self.abxy_active_action["a"] = act
                     self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_EAST:  # B -> Default Right Click (or View+B -> Alt+F4 Close Window)
+            elif code == BTN_EAST:  # B -> Default Right Click
                 if val == 0:
                     act = self.abxy_active_action.pop("b", None)
                     if act:
                         self.execute_bound_action(act, pressed=False, tap=False)
                     else:
                         self.vmouse.key(BTN_RIGHT, 0)
-                elif self.view_held:
-                    if val == 1:
-                        self.view_used_as_chord = True
-                        self.vkbd.tap_combo([KEY_LEFTALT], KEY_F4)
                 elif val == 1:
                     act = self.key_cfg.get("b_desktop", "mouse-right")
                     self.abxy_active_action["b"] = act
                     self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_NORTH:  # X -> Default Toggle OSK (or View+X -> Copy)
+            elif code == BTN_NORTH:  # X -> Default Toggle OSK
                 if val == 0:
                     act = self.abxy_active_action.pop("x", None)
                     if act:
                         self.execute_bound_action(act, pressed=False, tap=False)
-                elif self.view_held:
-                    if val == 1:
-                        self.view_used_as_chord = True
-                        self.perform_clipboard_action("copy")
                 elif val == 1:
                     act = self.key_cfg.get("x_desktop", "toggle-osk")
                     self.abxy_active_action["x"] = act
                     self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_WEST:  # Y -> Default Overview / Apps (or View+Y -> Screenshot)
+            elif code == BTN_WEST:  # Y -> Default Overview / Apps
                 if val == 0:
                     act = self.abxy_active_action.pop("y", None)
                     if act:
                         self.execute_bound_action(act, pressed=False, tap=False)
-                elif self.view_held:
-                    if val == 1:
-                        self.view_used_as_chord = True
-                        self.vkbd.tap_key(KEY_SYSRQ)
                 elif val == 1:
                     act = self.key_cfg.get("y_desktop", "overview")
                     self.abxy_active_action["y"] = act
                     self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_TL:  # LB -> Back (or View+LB -> Alt+Shift+Tab)
+            elif code == BTN_TL:  # LB -> Previous View (if overlay open) else Back
                 if val == 1:
-                    if self.view_held:
-                        self.view_used_as_chord = True
-                        if not self.alt_tab_active:
-                            self.vkbd.key(KEY_LEFTALT, 1)
-                            self.alt_tab_active = True
-                        self.vkbd.tap_combo([KEY_LEFTSHIFT], KEY_TAB)
+                    if overlay_open:
+                        self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_PAGEUP)
                     else:
                         self.vkbd.tap_combo([KEY_LEFTALT], KEY_LEFT)
 
-            elif code == BTN_TR:  # RB -> Forward (or View+RB -> Alt+Tab)
+            elif code == BTN_TR:  # RB -> Next View (if overlay open) else Forward
                 if val == 1:
-                    if self.view_held:
-                        self.view_used_as_chord = True
-                        if not self.alt_tab_active:
-                            self.vkbd.key(KEY_LEFTALT, 1)
-                            self.alt_tab_active = True
-                        self.vkbd.tap_key(KEY_TAB)
+                    if overlay_open:
+                        self.vkbd.tap_combo([KEY_LEFTCTRL], KEY_PAGEDOWN)
                     else:
                         self.vkbd.tap_combo([KEY_LEFTALT], KEY_RIGHT)
 
@@ -2524,7 +2538,7 @@ class MSIClawDaemon:
         return sign * min(1.0, norm)
 
     def tick_analog(self, dt):
-        if self.mode != "desktop":
+        if self.mode != "desktop" and not self._is_overlay_active():
             return
 
         # Left Stick -> Mouse Cursor Movement
@@ -2596,7 +2610,7 @@ class MSIClawDaemon:
 
     def _needs_analog_tick(self):
         return (
-            self.mode == "desktop"
+            (self.mode == "desktop" or self._is_overlay_active())
             and (
                 self._apply_deadzone(self.lx) != 0.0
                 or self._apply_deadzone(self.ly) != 0.0
@@ -2801,6 +2815,8 @@ class MSIClawDaemon:
                 self.toggle_overview()
             elif act == "quick-settings":
                 self.toggle_quick_settings()
+            elif act == "overlay-sync":
+                self._sync_overlay_grab()
 
     def _read_mcu_det_fd(self, fd):
         saw_real_activity = False
@@ -2981,6 +2997,12 @@ class MSIClawDaemon:
             if self.dock_check_deadline:
                 next_dock = max(0.005, self.dock_check_deadline - time.monotonic())
                 timeout = next_dock if timeout is None else min(timeout, next_dock)
+
+            if self.mode != "desktop" and self.grabbed:
+                if not self._is_overlay_active():
+                    self._sync_overlay_grab()
+                else:
+                    timeout = 1.5 if timeout is None else min(timeout, 1.5)
 
             try:
                 rlist, _, _ = select.select(watch_fds, [], [], timeout)
