@@ -25,8 +25,8 @@ WVKBD_COMMON_ARGS=(
   --wayland-layer overlay
   -L 290
   -H 290
-  -l full,special,emoji,nav
-  --landscape-layers full,special,emoji,nav
+  -l landscape,landscapespecial,emoji,nav
+  --landscape-layers landscape,landscapespecial,emoji,nav
   --fn "Sans Bold 16"
   --bg 10131ce8
   --fg 1f2536f0

@@ -17,6 +17,8 @@ const DBUS_IFACE = `
     <method name="ToggleOSK"/>
     <method name="OpenOSK"/>
     <method name="CloseOSK"/>
+    <method name="ShowOSK"/>
+    <method name="HideOSK"/>
     <method name="ToggleOverview"/>
     <method name="ShowApps"/>
     <method name="ToggleQuickSettings"/>
@@ -209,7 +211,7 @@ class ClawPanelButton extends PanelMenu.Button {
             'View + Menu: Toggle Desktop/Gamepad Mode',
             'View + D-Pad Up/Dn: Volume Up/Down',
             'View + D-Pad Lt/Rt: Brightness Down/Up',
-            'MSI Button (L): Apps | Quick Btn (R): Quick Settings',
+            'MSI Btn (L): Claw Center | Quick Btn (R): Quick Settings',
         ];
         for (const line of mappings) {
             const item = new PopupMenu.PopupMenuItem(line, {
@@ -690,7 +692,7 @@ export default class ClawControlsExtension extends Extension {
                 Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
             );
             showProc.communicate_utf8_async(null, null, (proc, res) => {
-                let scaleStr = '1.25';
+                let scaleStr = '1.5';
                 let resStr = '1920x1080';
                 try {
                     const [, stdout] = proc.communicate_utf8_finish(res);
@@ -711,9 +713,13 @@ export default class ClawControlsExtension extends Extension {
                     Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
                 );
                 modesProc.communicate_utf8_async(null, null, (mProc, mRes) => {
-                    let targetMode = hz === 60
-                        ? (resStr === '1600x900' ? '1600x900@59.946+vrr' : '1920x1080@60.004+vrr')
-                        : (resStr === '1600x900' ? '1600x900@119.948+vrr' : '1920x1080@120.003+vrr');
+                    let targetMode;
+                    if (resStr === '1600x900')
+                        targetMode = hz === 60 ? '1600x900@59.946+vrr' : '1600x900@119.948+vrr';
+                    else if (resStr === '1280x720')
+                        targetMode = hz === 60 ? '1280x720@59.855+vrr' : '1280x720@119.858+vrr';
+                    else
+                        targetMode = hz === 60 ? '1920x1080@60.004+vrr' : '1920x1080@120.003+vrr';
                     try {
                         const [, mOut] = mProc.communicate_utf8_finish(mRes);
                         if (mOut) {
@@ -925,11 +931,8 @@ export default class ClawControlsExtension extends Extension {
                     else
                         this.height = Math.round(monitor.height * 0.32);
 
-                    this.height = Math.clamp(
-                        this.height,
-                        minHeight,
-                        Math.round(monitor.height * 0.48)
-                    );
+                    const maxHeight = Math.round(monitor.height * 0.48);
+                    this.height = Math.max(minHeight, Math.min(this.height, maxHeight));
                 };
             }
 
@@ -1081,6 +1084,14 @@ export default class ClawControlsExtension extends Extension {
         } catch (e) {
             console.error('ClawControls CloseOSK error:', e);
         }
+    }
+
+    ShowOSK() {
+        this.OpenOSK();
+    }
+
+    HideOSK() {
+        this.CloseOSK();
     }
 
     ToggleOverview() {

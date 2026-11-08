@@ -26,58 +26,165 @@ CLAW_PIDS = ("00001901", "00001902", "00001903", "00001904")
 
 APP_CSS = """
 window {
-    background-color: #111318;
+    background-color: #0e1015;
+}
+headerbar {
+    background: linear-gradient(180deg, #161922, #11131a);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    min-height: 44px;
+}
+.telemetry-ribbon {
+    background-color: #13161e;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 8px 14px;
 }
 .telemetry-card {
-    background: linear-gradient(145deg, #1a1e28, #141720);
+    background: linear-gradient(145deg, #1b202b, #151821);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    padding: 10px 14px;
+    border-radius: 11px;
+    padding: 7px 11px;
 }
 .telemetry-title {
-    font-size: 0.78em;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #8b95a7;
+    font-size: 0.70em;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #7e8b9f;
 }
 .telemetry-value {
-    font-size: 1.18em;
+    font-size: 1.04em;
     font-weight: 800;
-    color: #f3f6fc;
+    color: #f4f7fd;
 }
 .telemetry-sub {
-    font-size: 0.82em;
-    color: #99c1f1;
+    font-size: 0.76em;
+    color: #8cb4e8;
+}
+.nav-tab-bar {
+    background-color: #171b24;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 3px;
+}
+.nav-tab-btn {
+    min-height: 32px;
+    font-weight: 800;
+    font-size: 0.84em;
+    border-radius: 9px;
+    padding: 4px 14px;
+    background: transparent;
+    color: #9ba6b8;
+    border: none;
+    transition: all 140ms ease;
+}
+.nav-tab-btn:hover {
+    color: #e6edf8;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+.nav-tab-btn.active-tab {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.38);
 }
 .section-card {
-    background-color: #181b22;
+    background: linear-gradient(180deg, #181c24, #151820);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 14px;
-    padding: 12px 14px;
+    padding: 11px 13px;
 }
 .section-heading {
-    font-size: 0.95em;
+    font-size: 0.92em;
     font-weight: 800;
-    color: #e6ebf5;
+    color: #eef2fa;
 }
 .section-caption {
-    font-size: 0.82em;
-    color: #8f98a8;
+    font-size: 0.79em;
+    color: #8c96a8;
+}
+.sub-card {
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+.key-badge {
+    background-color: #252b38;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 7px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #dbe4f3;
+}
+.key-badge-accent {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.32), rgba(59, 130, 246, 0.22));
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 7px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #93c5fd;
+}
+.key-badge-paddle {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.28), rgba(239, 68, 68, 0.18));
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    border-radius: 7px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #fca5a5;
+}
+.key-badge-a {
+    background-color: rgba(16, 185, 129, 0.22);
+    border: 1px solid rgba(52, 211, 153, 0.45);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #6ee7b7;
+}
+.key-badge-b {
+    background-color: rgba(239, 68, 68, 0.22);
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #fca5a5;
+}
+.key-badge-x {
+    background-color: rgba(59, 130, 246, 0.22);
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #93c5fd;
+}
+.key-badge-y {
+    background-color: rgba(245, 158, 11, 0.22);
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 0.76em;
+    font-weight: 800;
+    color: #fcd34d;
 }
 .pill-btn {
-    min-height: 44px;
+    min-height: 38px;
     font-weight: 700;
-    font-size: 0.88em;
-    border-radius: 12px;
-    padding: 6px 14px;
-    transition: all 150ms ease;
+    font-size: 0.84em;
+    border-radius: 10px;
+    padding: 4px 10px;
+    transition: all 140ms ease;
 }
 .pill-btn:focus-visible,
+.nav-tab-btn:focus-visible,
+dropdown:focus-visible,
 scale:focus-visible,
 switch:focus-visible {
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
-    box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.55);
 }
 .pill-btn.active-mode {
     background: linear-gradient(135deg, #2563eb, #3b82f6);
@@ -97,26 +204,28 @@ switch:focus-visible {
 .badge-ac {
     background-color: rgba(16, 185, 129, 0.18);
     color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
     border-radius: 999px;
-    padding: 4px 12px;
+    padding: 3px 10px;
     font-weight: 700;
-    font-size: 0.85em;
+    font-size: 0.78em;
 }
 .badge-bat {
     background-color: rgba(245, 158, 11, 0.20);
     color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
     border-radius: 999px;
-    padding: 4px 12px;
+    padding: 3px 10px;
     font-weight: 700;
-    font-size: 0.85em;
+    font-size: 0.78em;
 }
 scale trough {
-    min-height: 10px;
+    min-height: 9px;
     border-radius: 999px;
 }
 scale slider {
-    min-width: 26px;
-    min-height: 26px;
+    min-width: 22px;
+    min-height: 22px;
 }
 """
 
@@ -128,6 +237,14 @@ def read_sysfs(path, default=""):
         return default
 
 
+def kernel_lockdown_mode():
+    txt = read_sysfs("/sys/kernel/security/lockdown", "")
+    m = re.search(r"\[([a-zA-Z0-9_-]+)\]", txt)
+    if m and m.group(1) != "none":
+        return m.group(1)
+    return ""
+
+
 def gpu_priority_active():
     # Explicit flag set by the setup script; TuneD battery profiles also cap max_perf_pct, so the value alone is ambiguous
     max_pct = int(read_sysfs("/sys/devices/system/cpu/intel_pstate/max_perf_pct", "100") or 100)
@@ -136,6 +253,8 @@ def gpu_priority_active():
 
 def resolve_hwmon():
     cpu_temp = "/sys/class/hwmon/hwmon5/temp1_input"
+    acpitz_temp = None
+    found_coretemp = False
     fan1 = "/sys/class/hwmon/hwmon4/fan1_input"
     fan2 = "/sys/class/hwmon/hwmon4/fan2_input"
     for hdir in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
@@ -143,11 +262,17 @@ def resolve_hwmon():
         if name == "coretemp":
             if os.path.exists(f"{hdir}/temp1_input"):
                 cpu_temp = f"{hdir}/temp1_input"
+                found_coretemp = True
+        elif name == "acpitz":
+            if os.path.exists(f"{hdir}/temp1_input"):
+                acpitz_temp = f"{hdir}/temp1_input"
         elif name == "msi_wmi_platform":
             if os.path.exists(f"{hdir}/fan1_input"):
                 fan1 = f"{hdir}/fan1_input"
             if os.path.exists(f"{hdir}/fan2_input"):
                 fan2 = f"{hdir}/fan2_input"
+    if not found_coretemp and acpitz_temp:
+        cpu_temp = acpitz_temp
     return cpu_temp, fan1, fan2
 
 
@@ -179,8 +304,15 @@ class ClawRGBController:
         for sdir in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
             ue = read_sysfs(f"{sdir}/device/uevent").upper()
             if "0DB0:" in ue and any(p in ue for p in CLAW_PIDS):
+                try:
+                    rdesc = Path(f"{sdir}/device/report_descriptor").read_bytes()
+                    if rdesc.startswith(b"\x06\xa0\xff"):
+                        return sdir, "/dev/" + os.path.basename(sdir)
+                    continue
+                except OSError:
+                    pass
                 real_dev = os.path.realpath(f"{sdir}/device")
-                if "/INPUT1" in ue or ":1.1/" in real_dev or real_dev.endswith(":1.1"):
+                if re.search(r"/INPUT1(?:\r?\n|$)", ue) or ":1.1/" in real_dev or real_dev.endswith(":1.1"):
                     return sdir, "/dev/" + os.path.basename(sdir)
         return None, None
 
@@ -202,7 +334,12 @@ class ClawRGBController:
         return 0x024A
 
     def apply(self, r, g, b, brightness):
-        if not self.dev_path or not os.path.exists(self.dev_path):
+        if (
+            not self.dev_path
+            or not os.path.exists(self.dev_path)
+            or not self.sys_dir
+            or "0DB0:" not in read_sysfs(f"{self.sys_dir}/device/uevent").upper()
+        ):
             self.sys_dir, self.dev_path = self._find()
             if self.sys_dir:
                 self.addr = self._get_addr(self.sys_dir)
@@ -211,7 +348,7 @@ class ClawRGBController:
         try:
             fd = os.open(self.dev_path, os.O_RDWR | os.O_NONBLOCK)
         except PermissionError:
-            return False, "Permission denied on /dev/hidraw0 (run Live Fixes to grant access)"
+            return False, f"Permission denied on {self.dev_path} (run Live Fixes to grant access)"
         except OSError as e:
             self.dev_path = None
             return False, f"Device open failed: {e.strerror}"
@@ -244,7 +381,7 @@ class ClawRGBController:
 class MSIClawCenterWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="MSI Claw Center")
-        self.set_default_size(980, 580)
+        self.set_default_size(1020, 620)
 
         self.sys_bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         self.ses_bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -266,18 +403,47 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         self.gyro_enabled = True
         self.gyro_sens = 4.0
         self.gyro_mode = "lt_hold"
+        self.gyro_invert_x = False
+        self.gyro_invert_y = False
         if self.gyro_cfg_path.exists():
             try:
                 gcfg = json.loads(self.gyro_cfg_path.read_text())
                 self.gyro_enabled = bool(gcfg.get("enabled", True))
                 self.gyro_sens = max(1.0, min(10.0, float(gcfg.get("sensitivity", 4.0))))
                 self.gyro_mode = str(gcfg.get("mode", "lt_hold"))
+                self.gyro_invert_x = bool(gcfg.get("invert_x", False))
+                self.gyro_invert_y = bool(gcfg.get("invert_y", False))
             except Exception:
                 pass
         self._gyro_debounce_id = 0
         self._updating_gyro_ui = False
         self._updating_cooler_ui = False
 
+        self.keys_cfg_path = Path.home() / ".config" / "msi-claw-keys.json"
+        self.default_key_cfg = {
+            "view_desktop": "esc",
+            "menu_desktop": "alt-tab",
+            "f16_tap": "toggle-center",
+            "f16_chord": "overview",
+            "f15_tap": "quick-settings",
+            "f15_chord": "toggle-osk",
+            "m1_desktop": "toggle-osk",
+            "m2_desktop": "enter",
+            "m1_gamepad": "gyro-hold",
+            "m2_gamepad": "toggle-osk",
+            "m1_chord": "screenshot",
+            "m2_chord": "toggle-gyro",
+            "a_desktop": "mouse-left",
+            "b_desktop": "mouse-right",
+            "x_desktop": "toggle-osk",
+            "y_desktop": "overview",
+        }
+        self.key_cfg = dict(self.default_key_cfg)
+        self._load_key_bindings()
+        self._updating_keys_ui = False
+        self.key_dropdowns = {}
+
+        self.current_output = "eDP-1"
         self.current_res = "1920x1080"
         self.current_scale = "1.5"
         self.current_hz = 120
@@ -286,6 +452,9 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         self.bl_serial = 0
         self.bl_min = 1920
         self.bl_max = 192000
+        self.kde_bl_max = 10000
+        self._cached_is_plasma = None
+        self._cached_is_wlroots = None
         self._bl_updating = False
         self._bl_debounce_id = 0
         self._rgb_debounce_id = 0
@@ -302,7 +471,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         self._refresh_telemetry()
 
     def _make_telemetry_card(self, title):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.add_css_class("telemetry-card")
         box.set_hexpand(True)
 
@@ -320,69 +489,143 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         box.append(lbl_s)
         return box, lbl_v, lbl_s
 
+    def _make_key_dropdown(self, cfg_key, caption_txt, opt_list, badge_txt=None, badge_cls="key-badge"):
+        cell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        cell.set_hexpand(True)
+        hdr_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        if badge_txt:
+            b_lbl = Gtk.Label(label=badge_txt)
+            b_lbl.add_css_class(badge_cls)
+            hdr_row.append(b_lbl)
+        lbl = Gtk.Label(label=caption_txt, xalign=0.0, wrap=True)
+        lbl.add_css_class("section-caption")
+        lbl.set_hexpand(True)
+        hdr_row.append(lbl)
+
+        str_list = Gtk.StringList.new([o[1] for o in opt_list])
+        dd = Gtk.DropDown(model=str_list)
+        dd.set_hexpand(True)
+        cur_val = self.key_cfg.get(cfg_key, self.default_key_cfg.get(cfg_key, ""))
+        sel_i = 0
+        for oi, (oval, _) in enumerate(opt_list):
+            if oval == cur_val:
+                sel_i = oi
+                break
+        dd.set_selected(sel_i)
+        dd.connect("notify::selected", self._on_key_dropdown_changed, cfg_key, opt_list)
+        self.key_dropdowns[cfg_key] = (dd, opt_list)
+
+        cell.append(hdr_row)
+        cell.append(dd)
+        return cell
+
+    def _switch_tab(self, tab_name):
+        self.view_stack.set_visible_child_name(tab_name)
+        for tname, tbtn in self.nav_tab_buttons.items():
+            if tname == tab_name:
+                tbtn.add_css_class("active-tab")
+            else:
+                tbtn.remove_css_class("active-tab")
+
+    def _toggle_controller_mode_quick(self):
+        cur = read_sysfs(f"/dev/shm/msi-claw-mode-{os.getuid()}", "desktop")
+        self._set_controller_mode("gamepad" if cur == "desktop" else "desktop")
+
     def _build_ui(self):
         self.toast_overlay = Adw.ToastOverlay()
         toolbar = Adw.ToolbarView()
 
-        # Header Bar
+        # --- Header Bar with Integrated 3-Tab Switcher ---
         header = Adw.HeaderBar()
-        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        title_lbl = Gtk.Label(label="MSI Claw Center")
-        title_lbl.add_css_class("title-4")
-        self.power_badge = Gtk.Label(label="AC Power")
-        self.power_badge.add_css_class("badge-ac")
-        title_box.append(title_lbl)
-        title_box.append(self.power_badge)
-        header.set_title_widget(title_box)
 
+        left_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         osk_hdr_btn = Gtk.Button(icon_name="input-keyboard-symbolic", tooltip_text="Toggle On-Screen Keyboard")
         osk_hdr_btn.connect("clicked", lambda *_: self._send_claw_cmd("toggle-osk"))
-        header.pack_start(osk_hdr_btn)
+        left_hdr.append(osk_hdr_btn)
+
+        self.power_badge = Gtk.Label(label="AC Power")
+        self.power_badge.add_css_class("badge-ac")
+        left_hdr.append(self.power_badge)
+        header.pack_start(left_hdr)
+
+        # Center Segmented Navigation Bar
+        nav_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        nav_bar.add_css_class("nav-tab-bar")
+        self.nav_tab_buttons = {}
+        for tname, tlabel, ttip in [
+            ("perf", "⚡ Power & Display", "Performance, RAPL TDP, Display VRR & Battery Care (Key 1)"),
+            ("keys", "🎮 4-Key & Paddles", "4 Front Buttons, Rear M1/M2 Paddles & Desktop ABXY Remap (Key 2)"),
+            ("sys", "🌈 RGB & System", "Zero-Flash-Wear RGB Studio, Fingerprint & Diagnostics (Key 3)"),
+        ]:
+            tbtn = Gtk.Button(label=tlabel, tooltip_text=ttip)
+            tbtn.add_css_class("nav-tab-btn")
+            tbtn.connect("clicked", lambda _b, n=tname: self._switch_tab(n))
+            nav_bar.append(tbtn)
+            self.nav_tab_buttons[tname] = tbtn
+        header.set_title_widget(nav_bar)
+
+        # Right Header Quick Controls
+        self.hdr_mode_btn = Gtk.Button(label="🖱️ Desktop", tooltip_text="Quick-Switch Desktop / Gamepad Mode (View + Menu)")
+        self.hdr_mode_btn.add_css_class("pill-btn")
+        self.hdr_mode_btn.connect("clicked", lambda *_: self._toggle_controller_mode_quick())
 
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic", tooltip_text="Refresh Telemetry")
         refresh_btn.connect("clicked", lambda *_: self._refresh_telemetry())
-        header.pack_end(refresh_btn)
 
         about_btn = Gtk.Button(icon_name="help-about-symbolic", tooltip_text="About & GitHub Repository")
         about_btn.connect("clicked", self._on_show_about)
-        header.pack_end(about_btn)
 
+        header.pack_end(about_btn)
+        header.pack_end(refresh_btn)
+        header.pack_end(self.hdr_mode_btn)
         toolbar.add_top_bar(header)
 
-        # Scrollable Main Deck
-        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        root.set_margin_top(10)
-        root.set_margin_bottom(14)
-        root.set_margin_start(14)
-        root.set_margin_end(14)
+        # --- Main Vertical Layout: Pinned Telemetry Ribbon + Tabbed View Stack ---
+        main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-        # Row 1: Telemetry Cards (Configured to layout gracefully on all resolutions)
-        self.t_grid = Gtk.Grid(column_spacing=10, row_spacing=10, column_homogeneous=True)
+        # Persistent 4-Card Telemetry Ribbon (Always visible across all tabs)
+        ribbon_wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        ribbon_wrap.add_css_class("telemetry-ribbon")
+        self.t_grid = Gtk.Grid(column_spacing=8, row_spacing=6, column_homogeneous=True)
         self.card_bat, self.bat_val, self.bat_sub = self._make_telemetry_card("BATTERY & POWER")
-        self.card_cpu, self.cpu_val, self.cpu_sub = self._make_telemetry_card("METEOR LAKE CPU & TDP")
+        self.card_cpu, self.cpu_val, self.cpu_sub = self._make_telemetry_card("CPU & RAPL TDP")
         self.card_gpu, self.gpu_val, self.gpu_sub = self._make_telemetry_card("INTEL ARC GPU")
-        self.card_fan, self.fan_val, self.fan_sub = self._make_telemetry_card("COOLING & DISPLAY")
+        self.card_fan, self.fan_val, self.fan_sub = self._make_telemetry_card("FANS & DISPLAY")
 
-        # 2x2 Telemetry Card Grid (avoids minimum width overflow on handheld screens)
         self.t_grid.attach(self.card_bat, 0, 0, 1, 1)
         self.t_grid.attach(self.card_cpu, 1, 0, 1, 1)
-        self.t_grid.attach(self.card_gpu, 0, 1, 1, 1)
-        self.t_grid.attach(self.card_fan, 1, 1, 1, 1)
-        root.append(self.t_grid)
+        self.t_grid.attach(self.card_gpu, 2, 0, 1, 1)
+        self.t_grid.attach(self.card_fan, 3, 0, 1, 1)
+        ribbon_wrap.append(self.t_grid)
+        main_vbox.append(ribbon_wrap)
 
-        # Row 2: Touch Control Deck
-        self.cols_grid = Gtk.Grid(column_spacing=12, row_spacing=12, column_homogeneous=True)
-        self.left_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.right_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        # Stack for the 3 Views
+        self.view_stack = Gtk.Stack(
+            transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT,
+            transition_duration=160,
+        )
+        self.view_stack.set_vexpand(True)
+        self.view_stack.set_hexpand(True)
 
-        # --- LEFT CARD 1: Power & TDP Profile ---
-        pwr_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        # =====================================================================
+        # TAB 1: ⚡ PERFORMANCE, DISPLAY & BATTERY CARE
+        # =====================================================================
+        tab1_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
+        self.cols_grid = Gtk.Grid(column_spacing=12, row_spacing=10, column_homogeneous=True)
+        self.cols_grid.set_margin_top(10)
+        self.cols_grid.set_margin_bottom(12)
+        self.cols_grid.set_margin_start(14)
+        self.cols_grid.set_margin_end(14)
+        self.left_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.right_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+
+        # --- TAB 1 LEFT CARD 1: Power & TDP Profile ---
+        pwr_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
         pwr_card.add_css_class("section-card")
         pwr_hdr = Gtk.Label(label="Power, RAPL TDP & Handheld Scheduler", xalign=0.0)
         pwr_hdr.add_css_class("section-heading")
         self.pwr_desc = Gtk.Label(
-            label="Tunes PL1/PL2 wattage, CPU/GPU budget share, LPMD 2000ms WLT & sched_ext LAVD scheduler",
+            label="Tunes PL1/PL2 wattage, CPU/GPU budget share & sched_ext LAVD scheduler",
             xalign=0.0,
             wrap=True,
         )
@@ -390,7 +633,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         pwr_card.append(pwr_hdr)
         pwr_card.append(self.pwr_desc)
 
-        pwr_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, homogeneous=True)
+        pwr_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
         self.power_buttons = {}
         for prof, label, tip in [
             ("power-saver", "Eco · 11W", "Eco Profile: 11W PL1 / 14W PL2 TDP"),
@@ -404,7 +647,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
             self.power_buttons[prof] = btn
         pwr_card.append(pwr_btn_box)
 
-        scx_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, homogeneous=True)
+        scx_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
         self.scx_buttons = {}
         for smode, slbl, stip in [
             ("auto", "LAVD Auto", "scx_lavd autopilot gaming/desktop scheduler"),
@@ -434,92 +677,13 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         pwr_card.append(cb_row)
         self.left_col.append(pwr_card)
 
-        # --- LEFT CARD 2: Display, VRR, Scale & Brightness ---
-        disp_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=9)
-        disp_card.add_css_class("section-card")
-        disp_hdr = Gtk.Label(label="Display, Adaptive VRR & Backlight", xalign=0.0)
-        disp_hdr.add_css_class("section-heading")
-        disp_sub = Gtk.Label(
-            label="Native 1080p display with persistent 48–120 Hz Adaptive-Sync VRR & scaling presets",
-            xalign=0.0,
-            wrap=True,
-        )
-        disp_sub.add_css_class("section-caption")
-        disp_card.append(disp_hdr)
-        disp_card.append(disp_sub)
-
-        hz_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, homogeneous=True)
-        self.btn_60hz = Gtk.Button(label="60 Hz + VRR")
-        self.btn_60hz.add_css_class("pill-btn")
-        self.btn_60hz.connect("clicked", lambda *_: self._apply_display(60, self.current_scale, True, self.current_res))
-        self.btn_120hz = Gtk.Button(label="120 Hz + VRR")
-        self.btn_120hz.add_css_class("pill-btn")
-        self.btn_120hz.connect("clicked", lambda *_: self._apply_display(120, self.current_scale, True, self.current_res))
-        self.btn_fixed = Gtk.Button(label="120 Hz Fixed")
-        self.btn_fixed.add_css_class("pill-btn")
-        self.btn_fixed.connect("clicked", lambda *_: self._apply_display(120, self.current_scale, False, self.current_res))
-        hz_box.append(self.btn_60hz)
-        hz_box.append(self.btn_120hz)
-        hz_box.append(self.btn_fixed)
-        disp_card.append(hz_box)
-
-        res_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        res_lbl = Gtk.Label(label="Resolution:", xalign=0.0)
-        res_lbl.add_css_class("section-caption")
-        res_lbl.set_hexpand(True)
-        res_row.append(res_lbl)
-        self.res_buttons = {}
-        for rval, rtitle, rtip in [
-            ("1920x1080", "1080p", "1920x1080 Native Crisp Display"),
-            ("1600x900", "900p", "1600x900 Balanced Gaming Resolution"),
-            ("1280x720", "720p", "1280x720 High-FPS Gaming Resolution"),
-        ]:
-            rb = Gtk.Button(label=rtitle, tooltip_text=rtip)
-            rb.add_css_class("pill-btn")
-            rb.connect("clicked", lambda _b, r=rval: self._apply_display(self.current_hz, self.current_scale, self.current_vrr, r))
-            res_row.append(rb)
-            self.res_buttons[rval] = rb
-        disp_card.append(res_row)
-
-        scale_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        scale_lbl = Gtk.Label(label="UI Scale:", xalign=0.0)
-        scale_lbl.add_css_class("section-caption")
-        scale_lbl.set_hexpand(True)
-        scale_row.append(scale_lbl)
-        self.scale_buttons = {}
-        for sc, title, tip in [
-            ("1", "1.0x", "1.0x Native 1080p scale"),
-            ("1.25", "1.25x", "1.25x Compact handheld scale"),
-            ("1.5", "1.5x", "1.5x Recommended crisp handheld scale"),
-            ("2", "2.0x", "2.0x Large UI scale"),
-        ]:
-            sb = Gtk.Button(label=title, tooltip_text=tip)
-            sb.add_css_class("pill-btn")
-            sb.connect("clicked", lambda _b, s=sc: self._apply_display(self.current_hz, s, self.current_vrr, self.current_res))
-            scale_row.append(sb)
-            self.scale_buttons[sc] = sb
-        disp_card.append(scale_row)
-
-        bl_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        bl_icon = Gtk.Image.new_from_icon_name("display-brightness-symbolic")
-        self.bl_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1, 100, 1)
-        self.bl_scale.set_draw_value(False)
-        self.bl_scale.set_hexpand(True)
-        self.bl_pct_lbl = Gtk.Label(label="--%", width_chars=5, xalign=1.0)
-        self.bl_scale.connect("value-changed", self._on_brightness_changed)
-        bl_row.append(bl_icon)
-        bl_row.append(self.bl_scale)
-        bl_row.append(self.bl_pct_lbl)
-        disp_card.append(bl_row)
-        self.left_col.append(disp_card)
-
-        # --- LEFT CARD 3: Battery Limit, Dock & Handheld Automation ---
-        care_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        # --- TAB 1 LEFT CARD 2: Battery Charge Limit & Handheld Care ---
+        care_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
         care_card.add_css_class("section-card")
-        care_hdr = Gtk.Label(label="Battery Charge Limit & Dock / Handheld Care", xalign=0.0)
+        care_hdr = Gtk.Label(label="Battery Charge Limit & Handheld Care", xalign=0.0)
         care_hdr.add_css_class("section-heading")
         care_sub = Gtk.Label(
-            label="Caps EC 0xD7 charging with pure AC passthrough for safe 24/7 Ugreen Dock / Mini-PC use",
+            label="EC 0xD7 charge cap with pure AC passthrough for Dock / Handheld longevity",
             xalign=0.0,
             wrap=True,
         )
@@ -527,7 +691,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         care_card.append(care_hdr)
         care_card.append(care_sub)
 
-        chg_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, homogeneous=True)
+        chg_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
         self.charge_limit_buttons = {}
         for pct, clbl, ctip in [
             (60, "60% · Mini-PC", "Maximum battery lifespan for 24/7 stationary Mini-PC use"),
@@ -572,25 +736,112 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         care_card.append(sw3_row)
         self.left_col.append(care_card)
 
-        # --- RIGHT CARD 1: Controller Mode, Gyro Aim & OSK ---
-        ctrl_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        # --- TAB 1 RIGHT CARD 1: Display, VRR, Scale & Brightness ---
+        disp_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        disp_card.add_css_class("section-card")
+        disp_hdr = Gtk.Label(label="Display, Adaptive VRR & Backlight", xalign=0.0)
+        disp_hdr.add_css_class("section-heading")
+        disp_sub = Gtk.Label(
+            label="48–120 Hz Adaptive-Sync VRR, resolution & fractional scaling presets",
+            xalign=0.0,
+            wrap=True,
+        )
+        disp_sub.add_css_class("section-caption")
+        disp_card.append(disp_hdr)
+        disp_card.append(disp_sub)
+
+        hz_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
+        self.btn_60hz = Gtk.Button(label="60 Hz + VRR")
+        self.btn_60hz.add_css_class("pill-btn")
+        self.btn_60hz.connect("clicked", lambda *_: self._apply_display(60, self.current_scale, True, self.current_res))
+        self.btn_120hz = Gtk.Button(label="120 Hz + VRR")
+        self.btn_120hz.add_css_class("pill-btn")
+        self.btn_120hz.connect("clicked", lambda *_: self._apply_display(120, self.current_scale, True, self.current_res))
+        self.btn_fixed = Gtk.Button(label="120 Hz Fixed")
+        self.btn_fixed.add_css_class("pill-btn")
+        self.btn_fixed.connect("clicked", lambda *_: self._apply_display(120, self.current_scale, False, self.current_res))
+        hz_box.append(self.btn_60hz)
+        hz_box.append(self.btn_120hz)
+        hz_box.append(self.btn_fixed)
+        disp_card.append(hz_box)
+
+        res_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        res_lbl = Gtk.Label(label="Resolution:", xalign=0.0)
+        res_lbl.add_css_class("section-caption")
+        res_lbl.set_hexpand(True)
+        res_row.append(res_lbl)
+        self.res_buttons = {}
+        for rval, rtitle, rtip in [
+            ("1920x1080", "1080p", "1920x1080 Native Crisp Display"),
+            ("1600x900", "900p", "1600x900 Balanced Gaming Resolution"),
+            ("1280x720", "720p", "1280x720 High-FPS Gaming Resolution"),
+        ]:
+            rb = Gtk.Button(label=rtitle, tooltip_text=rtip)
+            rb.add_css_class("pill-btn")
+            rb.connect("clicked", lambda _b, r=rval: self._apply_display(self.current_hz, self.current_scale, self.current_vrr, r))
+            res_row.append(rb)
+            self.res_buttons[rval] = rb
+        disp_card.append(res_row)
+
+        scale_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        scale_lbl = Gtk.Label(label="UI Scale:", xalign=0.0)
+        scale_lbl.add_css_class("section-caption")
+        scale_lbl.set_hexpand(True)
+        scale_row.append(scale_lbl)
+        self.scale_buttons = {}
+        for sc, title, tip in [
+            ("1", "1.0x", "1.0x Native 1080p scale"),
+            ("1.25", "1.25x", "1.25x Compact handheld scale"),
+            ("1.5", "1.5x", "1.5x Recommended crisp handheld scale"),
+            ("2", "2.0x", "2.0x Large UI scale"),
+        ]:
+            sb = Gtk.Button(label=title, tooltip_text=tip)
+            sb.add_css_class("pill-btn")
+            sb.connect("clicked", lambda _b, s=sc: self._apply_display(self.current_hz, s, self.current_vrr, self.current_res))
+            scale_row.append(sb)
+            self.scale_buttons[sc] = sb
+        disp_card.append(scale_row)
+
+        bl_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        bl_icon = Gtk.Image.new_from_icon_name("display-brightness-symbolic")
+        self.bl_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1, 100, 1)
+        self.bl_scale.set_draw_value(False)
+        self.bl_scale.set_hexpand(True)
+        self.bl_pct_lbl = Gtk.Label(label="--%", width_chars=5, xalign=1.0)
+        self.bl_scale.connect("value-changed", self._on_brightness_changed)
+        bl_row.append(bl_icon)
+        bl_row.append(self.bl_scale)
+        bl_row.append(self.bl_pct_lbl)
+        disp_card.append(bl_row)
+        self.right_col.append(disp_card)
+
+        # --- TAB 1 RIGHT CARD 2: Controller Mode, Gyro Aim & OSK ---
+        ctrl_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
         ctrl_card.add_css_class("section-card")
-        ctrl_hdr = Gtk.Label(label="Built-In Controller, 6-Axis Gyro & Keyboard", xalign=0.0)
+        ctrl_hdr_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        ctrl_hdr = Gtk.Label(label="Controller Mode & 6-Axis Gyro Aim", xalign=0.0)
         ctrl_hdr.add_css_class("section-heading")
+        ctrl_hdr.set_hexpand(True)
+        remap_jump_btn = Gtk.Button(label="Remap Keys →", tooltip_text="Open 4-Key & M1/M2 Paddle Remapper")
+        remap_jump_btn.add_css_class("key-badge-accent")
+        remap_jump_btn.connect("clicked", lambda *_: self._switch_tab("keys"))
+        ctrl_hdr_row.append(ctrl_hdr)
+        ctrl_hdr_row.append(remap_jump_btn)
+        ctrl_card.append(ctrl_hdr_row)
+
         ctrl_sub = Gtk.Label(
-            label="F16 toggles menu · View + Menu switches Desktop/Gamepad · View + L3 toggles Gyro Aim",
+            label="View + Menu switches Desktop/Gamepad · Hold LT or M1 in Gamepad for Gyro Aim",
             xalign=0.0,
             wrap=True,
         )
         ctrl_sub.add_css_class("section-caption")
-        ctrl_card.append(ctrl_hdr)
         ctrl_card.append(ctrl_sub)
 
-        mode_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, homogeneous=True)
-        self.btn_mode_desktop = Gtk.Button(label="Desktop Mouse / Kbd")
+        mode_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
+        self.btn_mode_desktop = Gtk.Button(label="🖱️ Desktop Mouse / Kbd")
         self.btn_mode_desktop.add_css_class("pill-btn")
         self.btn_mode_desktop.connect("clicked", lambda *_: self._set_controller_mode("desktop"))
-        self.btn_mode_gamepad = Gtk.Button(label="Xbox Gamepad Mode")
+        self.btn_mode_gamepad = Gtk.Button(label="🎮 Xbox Gamepad Mode")
         self.btn_mode_gamepad.add_css_class("pill-btn")
         self.btn_mode_gamepad.connect("clicked", lambda *_: self._set_controller_mode("gamepad"))
         mode_box.append(self.btn_mode_desktop)
@@ -603,7 +854,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         ctrl_card.append(osk_btn)
 
         gyro_sw_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        gyro_sw_lbl = Gtk.Label(label="6-Axis Gyro Fine-Aim (Hold LT in Gamepad Mode)", xalign=0.0, wrap=True)
+        gyro_sw_lbl = Gtk.Label(label="6-Axis Gyro Fine-Aim (Hold LT / M1 in Gamepad Mode)", xalign=0.0, wrap=True)
         gyro_sw_lbl.add_css_class("section-caption")
         gyro_sw_lbl.set_hexpand(True)
         self.gyro_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
@@ -628,13 +879,282 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         ctrl_card.append(gyro_sens_row)
         self.right_col.append(ctrl_card)
 
-        # --- RIGHT CARD 2: Zero-Flash-Wear RGB Studio ---
+        self.cols_grid.attach(self.left_col, 0, 0, 1, 1)
+        self.cols_grid.attach(self.right_col, 1, 0, 1, 1)
+        tab1_scroll.set_child(self.cols_grid)
+        self.view_stack.add_named(tab1_scroll, "perf")
+
+        # =====================================================================
+        # TAB 2: 🎮 4 FRONT BUTTONS, M1/M2 PADDLES & DESKTOP ABXY REMAP
+        # =====================================================================
+        tab2_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
+        tab2_root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        tab2_root.set_margin_top(10)
+        tab2_root.set_margin_bottom(12)
+        tab2_root.set_margin_start(14)
+        tab2_root.set_margin_end(14)
+
+        # Top Preset & Chords Guide Banner
+        preset_banner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        preset_banner.add_css_class("section-card")
+        pb_top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pb_title = Gtk.Label(label="Quick Remap Presets & Hardware MCU Paddle Profiles", xalign=0.0)
+        pb_title.add_css_class("section-heading")
+        pb_title.set_hexpand(True)
+        pb_hint = Gtk.Label(label="Hold View (Top-Left) + Any Key = Chord Action", xalign=1.0)
+        pb_hint.add_css_class("key-badge-accent")
+        pb_top.append(pb_title)
+        pb_top.append(pb_hint)
+        preset_banner.append(pb_top)
+
+        preset_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, homogeneous=True)
+        for plbl, pmode, ptip in [
+            ("Default Layout", "default", "Restore default 4 front keys + M1 Gyro Hold / M2 OSK"),
+            ("M1/M2: Xbox A / B", "ab_paddles", "Map rear paddles M1=Xbox A and M2=Xbox B in Gamepad Mode (Zero-Latency MCU)"),
+            ("M1/M2: Xbox R3 / L3", "r3l3_paddles", "Map rear paddles M1=Xbox R3 and M2=Xbox L3 in Gamepad Mode (Zero-Latency MCU)"),
+            ("M1/M2: Copy / Paste", "desk_productivity", "Map rear paddles to Copy (Ctrl+C) and Paste (Ctrl+V) in Desktop Mode"),
+        ]:
+            pbtn = Gtk.Button(label=plbl, tooltip_text=ptip)
+            pbtn.add_css_class("pill-btn")
+            pbtn.connect("clicked", self._on_key_preset_clicked, pmode)
+            preset_btn_box.append(pbtn)
+        preset_banner.append(preset_btn_box)
+        tab2_root.append(preset_banner)
+
+        self._std_key_opts = [
+            ("toggle-center", "MSI Claw Center"),
+            ("quick-settings", "Quick Settings"),
+            ("toggle-osk", "Toggle Keyboard"),
+            ("overview", "Overview / Apps"),
+            ("toggle-mode", "Switch Mode"),
+            ("gyro-hold", "Hold Gyro Aim"),
+            ("toggle-gyro", "Toggle Gyro Aim"),
+            ("screenshot", "Screenshot"),
+            ("esc", "Escape (Esc)"),
+            ("enter", "Enter / Return"),
+            ("space", "Spacebar"),
+            ("tab", "Tab"),
+            ("backspace", "Backspace"),
+            ("alt-tab", "Alt + Tab"),
+            ("close-window", "Close (Alt+F4)"),
+            ("copy", "Copy (Ctrl+C)"),
+            ("paste", "Paste (Ctrl+V)"),
+            ("mouse-left", "Left Click"),
+            ("mouse-right", "Right Click"),
+            ("mouse-middle", "Middle Click"),
+            ("browser-back", "Back (Alt+Left)"),
+            ("browser-forward", "Forward (Alt+Right)"),
+            ("vol-up", "Volume Up"),
+            ("vol-down", "Volume Down"),
+            ("vol-mute", "Audio Mute"),
+            ("bright-up", "Brightness Up"),
+            ("bright-down", "Brightness Down"),
+            ("disabled", "Disabled"),
+        ]
+        self._mkey_gp_opts = [
+            ("gyro-hold", "Hold Gyro Aim"),
+            ("toggle-osk", "Toggle Keyboard"),
+            ("hw:BTN_SOUTH", "Xbox A (HW MCU)"),
+            ("hw:BTN_EAST", "Xbox B (HW MCU)"),
+            ("hw:BTN_NORTH", "Xbox X (HW MCU)"),
+            ("hw:BTN_WEST", "Xbox Y (HW MCU)"),
+            ("hw:BTN_THUMBL", "Xbox L3 (HW MCU)"),
+            ("hw:BTN_THUMBR", "Xbox R3 (HW MCU)"),
+            ("hw:BTN_TL", "Xbox LB (HW MCU)"),
+            ("hw:BTN_TR", "Xbox RB (HW MCU)"),
+            ("hw:BTN_TL2", "Xbox LT (HW MCU)"),
+            ("hw:BTN_TR2", "Xbox RT (HW MCU)"),
+            ("hw:ABS_HAT0Y_UP", "D-Pad Up (HW MCU)"),
+            ("hw:ABS_HAT0Y_DOWN", "D-Pad Down (HW MCU)"),
+            ("hw:ABS_HAT0X_LEFT", "D-Pad Left (HW MCU)"),
+            ("hw:ABS_HAT0X_RIGHT", "D-Pad Right (HW MCU)"),
+            ("hw:BTN_SELECT", "Xbox View (HW MCU)"),
+            ("hw:BTN_START", "Xbox Menu (HW MCU)"),
+            ("hw:BTN_MODE", "Xbox Guide (HW MCU)"),
+        ] + [opt for opt in self._std_key_opts if opt[0] not in ("gyro-hold", "toggle-osk")]
+
+        self.remap_cols_grid = Gtk.Grid(column_spacing=12, row_spacing=10, column_homogeneous=True)
+        remap_left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        remap_right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+
+        # --- TAB 2 LEFT: 4 Front System Buttons ---
+        front_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        front_card.add_css_class("section-card")
+        front_hdr = Gtk.Label(label="4 Front System Buttons (Left & Right Bezels)", xalign=0.0)
+        front_hdr.add_css_class("section-heading")
+        front_sub = Gtk.Label(
+            label="Works globally in both Desktop & Gamepad modes · Hold View + Button for secondary chord",
+            xalign=0.0,
+            wrap=True,
+        )
+        front_sub.add_css_class("section-caption")
+        front_card.append(front_hdr)
+        front_card.append(front_sub)
+
+        # Front 1: Bottom-Left MSI Center M (F16)
+        f16_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        f16_box.add_css_class("sub-card")
+        f16_title = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        f16_b = Gtk.Label(label="F16 · Bottom-Left")
+        f16_b.add_css_class("key-badge-accent")
+        f16_t = Gtk.Label(label="MSI Center M Button", xalign=0.0)
+        f16_t.add_css_class("section-heading")
+        f16_title.append(f16_b)
+        f16_title.append(f16_t)
+        f16_box.append(f16_title)
+        f16_grid = Gtk.Grid(column_spacing=8, row_spacing=4, column_homogeneous=True)
+        f16_grid.attach(self._make_key_dropdown("f16_tap", "Single Tap", self._std_key_opts), 0, 0, 1, 1)
+        f16_grid.attach(self._make_key_dropdown("f16_chord", "View + F16 Chord", self._std_key_opts), 1, 0, 1, 1)
+        f16_box.append(f16_grid)
+        front_card.append(f16_box)
+
+        # Front 2: Bottom-Right Quick Settings (F15)
+        f15_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        f15_box.add_css_class("sub-card")
+        f15_title = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        f15_b = Gtk.Label(label="F15 · Bottom-Right")
+        f15_b.add_css_class("key-badge-accent")
+        f15_t = Gtk.Label(label="Quick Settings Button", xalign=0.0)
+        f15_t.add_css_class("section-heading")
+        f15_title.append(f15_b)
+        f15_title.append(f15_t)
+        f15_box.append(f15_title)
+        f15_grid = Gtk.Grid(column_spacing=8, row_spacing=4, column_homogeneous=True)
+        f15_grid.attach(self._make_key_dropdown("f15_tap", "Single Tap", self._std_key_opts), 0, 0, 1, 1)
+        f15_grid.attach(self._make_key_dropdown("f15_chord", "View + F15 Chord", self._std_key_opts), 1, 0, 1, 1)
+        f15_box.append(f15_grid)
+        front_card.append(f15_box)
+
+        # Front 3: Top-Left View & Top-Right Menu
+        vm_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        vm_box.add_css_class("sub-card")
+        vm_title = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        vm_b = Gtk.Label(label="VIEW & MENU · Top Bezels")
+        vm_b.add_css_class("key-badge")
+        vm_t = Gtk.Label(label="Desktop Tap Actions (Native Select/Start in Gamepad)", xalign=0.0, wrap=True)
+        vm_t.add_css_class("section-caption")
+        vm_title.append(vm_b)
+        vm_title.append(vm_t)
+        vm_box.append(vm_title)
+        vm_grid = Gtk.Grid(column_spacing=8, row_spacing=4, column_homogeneous=True)
+        vm_grid.attach(self._make_key_dropdown("view_desktop", "Top-Left (View Tap)", self._std_key_opts), 0, 0, 1, 1)
+        vm_grid.attach(self._make_key_dropdown("menu_desktop", "Top-Right (Menu Tap)", self._std_key_opts), 1, 0, 1, 1)
+        vm_box.append(vm_grid)
+        front_card.append(vm_box)
+
+        remap_left.append(front_card)
+
+        # --- TAB 2 RIGHT CARD 1: Rear Macro Paddles M1 & M2 ---
+        paddles_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        paddles_card.add_css_class("section-card")
+        pad_hdr = Gtk.Label(label="Rear Macro Paddles (M1 Back-Right & M2 Back-Left)", xalign=0.0)
+        pad_hdr.add_css_class("section-heading")
+        pad_sub = Gtk.Label(
+            label="Hardware MCU Xbox bindings run with 0ms latency in volatile RAM (zero flash wear)",
+            xalign=0.0,
+            wrap=True,
+        )
+        pad_sub.add_css_class("section-caption")
+        paddles_card.append(pad_hdr)
+        paddles_card.append(pad_sub)
+
+        # M1 Back-Right Sub-Card
+        m1_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        m1_box.add_css_class("sub-card")
+        m1_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        m1_b = Gtk.Label(label="M1 · Back-Right")
+        m1_b.add_css_class("key-badge-paddle")
+        m1_t = Gtk.Label(label="Right Rear Macro Paddle", xalign=0.0)
+        m1_t.add_css_class("section-heading")
+        m1_hdr.append(m1_b)
+        m1_hdr.append(m1_t)
+        m1_box.append(m1_hdr)
+        m1_grid = Gtk.Grid(column_spacing=8, row_spacing=4, column_homogeneous=True)
+        m1_grid.attach(self._make_key_dropdown("m1_gamepad", "Gamepad Mode (MCU/Sys)", self._mkey_gp_opts), 0, 0, 1, 1)
+        m1_grid.attach(self._make_key_dropdown("m1_desktop", "Desktop Mode Tap", self._std_key_opts), 1, 0, 1, 1)
+        m1_box.append(m1_grid)
+        paddles_card.append(m1_box)
+
+        # M2 Back-Left Sub-Card
+        m2_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        m2_box.add_css_class("sub-card")
+        m2_hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        m2_b = Gtk.Label(label="M2 · Back-Left")
+        m2_b.add_css_class("key-badge-paddle")
+        m2_t = Gtk.Label(label="Left Rear Macro Paddle", xalign=0.0)
+        m2_t.add_css_class("section-heading")
+        m2_hdr.append(m2_b)
+        m2_hdr.append(m2_t)
+        m2_box.append(m2_hdr)
+        m2_grid = Gtk.Grid(column_spacing=8, row_spacing=4, column_homogeneous=True)
+        m2_grid.attach(self._make_key_dropdown("m2_gamepad", "Gamepad Mode (MCU/Sys)", self._mkey_gp_opts), 0, 0, 1, 1)
+        m2_grid.attach(self._make_key_dropdown("m2_desktop", "Desktop Mode Tap", self._std_key_opts), 1, 0, 1, 1)
+        m2_box.append(m2_grid)
+        paddles_card.append(m2_box)
+
+        # View + M1 / M2 Chords Sub-Card
+        mc_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        mc_box.add_css_class("sub-card")
+        mc_grid = Gtk.Grid(column_spacing=8, row_spacing=4, column_homogeneous=True)
+        mc_grid.attach(self._make_key_dropdown("m1_chord", "View + M1 Chord", self._std_key_opts), 0, 0, 1, 1)
+        mc_grid.attach(self._make_key_dropdown("m2_chord", "View + M2 Chord", self._std_key_opts), 1, 0, 1, 1)
+        mc_box.append(mc_grid)
+        paddles_card.append(mc_box)
+        remap_right.append(paddles_card)
+
+        # --- TAB 2 RIGHT CARD 2: Desktop Mode ABXY Face Buttons ---
+        abxy_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        abxy_card.add_css_class("section-card")
+        abxy_hdr = Gtk.Label(label="Desktop Mode Face Buttons (A / B / X / Y)", xalign=0.0)
+        abxy_hdr.add_css_class("section-heading")
+        abxy_sub = Gtk.Label(
+            label="Chords: View+A=Paste · View+B=Close · View+X=Copy · View+Y=Screenshot",
+            xalign=0.0,
+            wrap=True,
+        )
+        abxy_sub.add_css_class("section-caption")
+        abxy_card.append(abxy_hdr)
+        abxy_card.append(abxy_sub)
+
+        abxy_grid = Gtk.Grid(column_spacing=8, row_spacing=6, column_homogeneous=True)
+        abxy_grid.attach(
+            self._make_key_dropdown("a_desktop", "South Button", self._std_key_opts, "A", "key-badge-a"), 0, 0, 1, 1
+        )
+        abxy_grid.attach(
+            self._make_key_dropdown("b_desktop", "East Button", self._std_key_opts, "B", "key-badge-b"), 1, 0, 1, 1
+        )
+        abxy_grid.attach(
+            self._make_key_dropdown("x_desktop", "West Button", self._std_key_opts, "X", "key-badge-x"), 0, 1, 1, 1
+        )
+        abxy_grid.attach(
+            self._make_key_dropdown("y_desktop", "North Button", self._std_key_opts, "Y", "key-badge-y"), 1, 1, 1, 1
+        )
+        abxy_card.append(abxy_grid)
+        remap_right.append(abxy_card)
+
+        self.remap_cols_grid.attach(remap_left, 0, 0, 1, 1)
+        self.remap_cols_grid.attach(remap_right, 1, 0, 1, 1)
+        tab2_root.append(self.remap_cols_grid)
+        tab2_scroll.set_child(tab2_root)
+        self.view_stack.add_named(tab2_scroll, "keys")
+
+        # =====================================================================
+        # TAB 3: 🌈 RGB STUDIO & SYSTEM DIAGNOSTICS
+        # =====================================================================
+        tab3_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vscrollbar_policy=Gtk.PolicyType.AUTOMATIC)
+        self.sys_cols_grid = Gtk.Grid(column_spacing=12, row_spacing=10, column_homogeneous=True)
+        self.sys_cols_grid.set_margin_top(10)
+        self.sys_cols_grid.set_margin_bottom(12)
+        self.sys_cols_grid.set_margin_start(14)
+        self.sys_cols_grid.set_margin_end(14)
+
+        # --- TAB 3 LEFT: Zero-Flash-Wear RGB Studio ---
         rgb_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=9)
         rgb_card.add_css_class("section-card")
-        rgb_hdr = Gtk.Label(label="Thumbstick & ABXY RGB Studio", xalign=0.0)
+        rgb_hdr = Gtk.Label(label="Thumbstick & ABXY RGB Studio (Zero Flash Wear)", xalign=0.0)
         rgb_hdr.add_css_class("section-heading")
         rgb_sub = Gtk.Label(
-            label="Direct HID streaming without ROM flash wear — turning Off saves ~0.8W on battery",
+            label="Direct volatile HID streaming without ROM wear — turning Off saves ~0.8W on battery",
             xalign=0.0,
             wrap=True,
         )
@@ -676,12 +1196,31 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         rgb_ctrl_row.append(self.rgb_scale)
         rgb_ctrl_row.append(self.rgb_pct_lbl)
         rgb_card.append(rgb_ctrl_row)
-        self.right_col.append(rgb_card)
 
-        # --- RIGHT CARD 3: System Diagnostics & Actions ---
+        # Quick Shortcuts Cheat-Sheet Card under RGB Studio
+        cheat_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        cheat_card.add_css_class("sub-card")
+        cheat_hdr = Gtk.Label(label="Global Hardware Chord Shortcuts (Hold View / Select)", xalign=0.0)
+        cheat_hdr.add_css_class("section-heading")
+        cheat_lbl = Gtk.Label(
+            label=(
+                "• View + Menu: Switch Desktop / Xbox Gamepad Mode\n"
+                "• View + D-Pad Up / Down: Volume Up / Down\n"
+                "• View + D-Pad Left / Right: Brightness Down / Up\n"
+                "• View + L3 (Left Stick Click): Toggle 6-Axis Gyro Aim"
+            ),
+            xalign=0.0,
+            wrap=True,
+        )
+        cheat_lbl.add_css_class("section-caption")
+        cheat_card.append(cheat_hdr)
+        cheat_card.append(cheat_lbl)
+        rgb_card.append(cheat_card)
+
+        # --- TAB 3 RIGHT: System Diagnostics & Actions ---
         sys_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         sys_card.add_css_class("section-card")
-        sys_hdr = Gtk.Label(label="System Power Tuning & Diagnostics", xalign=0.0)
+        sys_hdr = Gtk.Label(label="System Power Tuning, Biometrics & Diagnostics", xalign=0.0)
         sys_hdr.add_css_class("section-heading")
         self.sys_status_lbl = Gtk.Label(
             label="Detecting hardware configuration...",
@@ -712,22 +1251,24 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         self.repo_btn.add_css_class("pill-btn")
         self.repo_btn.connect("clicked", self._on_open_repo)
         sys_card.append(self.repo_btn)
-        self.right_col.append(sys_card)
 
-        # Attach columns
-        self.cols_grid.attach(self.left_col, 0, 0, 1, 1)
-        self.cols_grid.attach(self.right_col, 1, 0, 1, 1)
-        root.append(self.cols_grid)
+        self.sys_cols_grid.attach(rgb_card, 0, 0, 1, 1)
+        self.sys_cols_grid.attach(sys_card, 1, 0, 1, 1)
+        tab3_scroll.set_child(self.sys_cols_grid)
+        self.view_stack.add_named(tab3_scroll, "sys")
 
-        scroll.set_child(root)
-        toolbar.set_content(scroll)
+        main_vbox.append(self.view_stack)
+        toolbar.set_content(main_vbox)
         self.toast_overlay.set_child(toolbar)
         self.set_content(self.toast_overlay)
+
+        # Default to Tab 1
+        self._switch_tab("perf")
 
         # Breakpoint for small viewports / 2.0x scale (width < 800px)
         self._setup_breakpoint()
 
-        # Keyboard controller (Escape/q to hide/close)
+        # Keyboard controller (Escape/q to hide/close, 1/2/3 or F1/F2/F3 to switch tabs)
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self._on_key_pressed)
         self.add_controller(key_ctrl)
@@ -735,15 +1276,32 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
     def _setup_breakpoint(self):
         try:
             bp = Adw.Breakpoint.new(Adw.breakpoint_condition_parse("max-width: 800sp"))
-            # In narrow mode, rearrange telemetry to 2x2 grid
             bp.add_setter(self.t_grid, "column-homogeneous", True)
             self.add_breakpoint(bp)
         except Exception:
             pass
 
     def _on_key_pressed(self, _controller, keyval, _keycode, state):
-        if keyval in (Gdk.KEY_Escape, Gdk.KEY_q, Gdk.KEY_Q, Gdk.KEY_F16):
+        mods = state & Gtk.accelerator_get_default_mod_mask()
+        if keyval == Gdk.KEY_Escape:
             self.close()
+            return True
+        if keyval in (Gdk.KEY_q, Gdk.KEY_Q) and (mods == 0 or mods == Gdk.ModifierType.CONTROL_MASK):
+            self.close()
+            return True
+        if keyval in (Gdk.KEY_w, Gdk.KEY_W) and mods == Gdk.ModifierType.CONTROL_MASK:
+            self.close()
+            return True
+        if mods & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK | Gdk.ModifierType.SUPER_MASK):
+            return False
+        if keyval in (Gdk.KEY_1, Gdk.KEY_F1):
+            self._switch_tab("perf")
+            return True
+        if keyval in (Gdk.KEY_2, Gdk.KEY_F2):
+            self._switch_tab("keys")
+            return True
+        if keyval in (Gdk.KEY_3, Gdk.KEY_F3):
+            self._switch_tab("sys")
             return True
         return False
 
@@ -793,7 +1351,13 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         try:
             if self._is_plasma():
                 pd_txt = read_sysfs(str(Path.home() / ".config" / "powerdevilrc"), "")
-                idle_ok = "AutoSuspendIdleTimeoutSec=300" in pd_txt or "AutoSuspendAction=0" in pd_txt
+                idle_ok = False
+                for blk in re.split(r"(?m)^(?=\[)", pd_txt):
+                    if blk.startswith("[Battery][SuspendAndShutdown]"):
+                        m_to = re.search(r"(?m)^AutoSuspendIdleTimeoutSec=(\d+)", blk)
+                        if m_to:
+                            idle_ok = int(m_to.group(1)) <= 300
+                        break
                 self.fast_idle_switch.set_active(idle_ok)
                 ksl_txt = read_sysfs(str(Path.home() / ".config" / "kscreenlockerrc"), "")
                 self.instant_wake_switch.set_active("LockOnResume=false" in ksl_txt)
@@ -817,18 +1381,42 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         self._sync_display()
 
     def _is_plasma(self):
-        return (
-            os.environ.get("XDG_CURRENT_DESKTOP") == "KDE"
-            or "plasma" in os.environ.get("DESKTOP_SESSION", "").lower()
-            or os.system("pgrep -x kwin_wayland >/dev/null 2>&1") == 0
-        )
-
-    def _is_wlroots(self):
+        if self._cached_is_plasma is not None:
+            return self._cached_is_plasma
         de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
         sess = os.environ.get("DESKTOP_SESSION", "").lower()
-        return any(k in de or k in sess for k in ("labwc", "wlroots", "sway", "river", "dwl")) or (
-            not self._is_plasma() and os.system("pgrep -x labwc >/dev/null 2>&1") == 0
-        )
+        if "kde" in de or "plasma" in sess:
+            self._cached_is_plasma = True
+        elif de or sess:
+            self._cached_is_plasma = False
+        else:
+            self._cached_is_plasma = (
+                subprocess.call(["pgrep", "-x", "kwin_wayland"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+            )
+        return self._cached_is_plasma
+
+    def _is_wlroots(self):
+        if self._cached_is_wlroots is not None:
+            return self._cached_is_wlroots
+        de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+        sess = os.environ.get("DESKTOP_SESSION", "").lower()
+        if any(k in de or k in sess for k in ("labwc", "wlroots", "sway", "river", "dwl")):
+            self._cached_is_wlroots = True
+        elif de or sess or self._is_plasma():
+            self._cached_is_wlroots = False
+        else:
+            self._cached_is_wlroots = (
+                subprocess.call(["pgrep", "-x", "labwc"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+            )
+        return self._cached_is_wlroots
+
+    def _finish_dbus_call(self, bus, res, fallback_cmd=None):
+        try:
+            if bus is not None:
+                bus.call_finish(res)
+        except Exception:
+            if fallback_cmd:
+                self._send_claw_cmd(fallback_cmd)
 
     def _sync_backlight(self):
         # 1. Try KDE Solid PowerManagement first when on Plasma
@@ -858,6 +1446,8 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                     None,
                 )
                 mx = int(res_max.unpack()[0])
+                if mx > 0:
+                    self.kde_bl_max = mx
                 pct = max(1, min(100, round(val * 100 / max(1, mx))))
                 self._bl_updating = True
                 self.bl_scale.set_value(pct)
@@ -922,17 +1512,18 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         # 1. Try KDE Solid PowerManagement
         if self._is_plasma():
             try:
+                raw_kde = max(1, min(self.kde_bl_max, int(round(pct * self.kde_bl_max / 100.0))))
                 self.ses_bus.call(
                     "org.kde.Solid.PowerManagement",
                     "/org/kde/Solid/PowerManagement/Actions/BrightnessControl",
                     "org.kde.Solid.PowerManagement.Actions.BrightnessControl",
-                    "setBrightness",
-                    GLib.Variant("(i)", (int(pct * 100),)),
+                    "setBrightnessSilent",
+                    GLib.Variant("(i)", (raw_kde,)),
                     None,
                     Gio.DBusCallFlags.NONE,
                     250,
                     None,
-                    lambda b, r: (b.call_finish(r) if b else None),
+                    lambda b, r: self._finish_dbus_call(b, r),
                 )
                 return GLib.SOURCE_REMOVE
             except Exception:
@@ -953,7 +1544,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                     Gio.DBusCallFlags.NONE,
                     300,
                     None,
-                    lambda b, r: (b.call_finish(r) if b else None),
+                    lambda b, r: self._finish_dbus_call(b, r),
                 )
                 return GLib.SOURCE_REMOVE
             except Exception:
@@ -978,7 +1569,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                     Gio.DBusCallFlags.NONE,
                     300,
                     None,
-                    lambda _b, r: (bus.call_finish(r) if bus else None),
+                    lambda _b, r: self._finish_dbus_call(bus, r),
                 )
             except Exception:
                 pass
@@ -1069,19 +1660,34 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                 enabled_outs[0] if enabled_outs else outputs[0]
             )
             if edp_out:
-                modes_map = {}
-                for m in edp_out.get("modes", []):
-                    mw = m.get("size", {}).get("width")
-                    mh = m.get("size", {}).get("height")
-                    mhz = round(m.get("refreshRate", 0))
-                    mid = m.get("id")
-                    if mw and mh and mid is not None:
-                        bucket_hz = 60 if mhz < 90 else 120
-                        modes_map[(f"{mw}x{mh}", bucket_hz)] = str(mid)
-                self._kscreen_modes = modes_map
+                locked = int(edp_out.get("autoRotatePolicy", 1)) == 0
+                if self.orient_switch.get_active() != locked:
+                    self._switches_updating = True
+                    self.orient_switch.set_active(locked)
+                    self._switches_updating = False
+
+            modes_map = {}
+            modes_err = {}
+            for m in out.get("modes", []):
+                mw = m.get("size", {}).get("width")
+                mh = m.get("size", {}).get("height")
+                mrate = float(m.get("refreshRate", 0) or 0)
+                mid = m.get("id")
+                if mw and mh and mid is not None and mrate > 0:
+                    bucket_hz = 60 if mrate < 90 else 120
+                    key = (f"{mw}x{mh}", bucket_hz)
+                    err = abs(mrate - bucket_hz)
+                    if key not in modes_err or err < modes_err[key]:
+                        modes_err[key] = err
+                        modes_map[key] = str(mid)
+            self._kscreen_modes = modes_map
 
             conn_name = str(out.get("name", "eDP-1"))
-            self.current_scale = str(out.get("scale", 1.5)).rstrip("0").rstrip(".")
+            self.current_output = conn_name
+            try:
+                self.current_scale = f"{float(out.get('scale', 1.5)):g}"
+            except (TypeError, ValueError):
+                self.current_scale = "1.5"
             cur_id = str(out.get("currentModeId"))
             exact_hz = 120
             for m in out.get("modes", []):
@@ -1178,13 +1784,14 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         self._update_display_highlights()
 
         if self._is_plasma():
+            out_name = self.current_output or "eDP-1"
             vrr_pol = "automatic" if vrr else "never"
             mode_spec = self._kscreen_modes.get((res_txt, hz)) or f"{res_txt}@{hz}"
             cmd = [
                 "kscreen-doctor",
-                f"output.eDP-1.mode.{mode_spec}",
-                f"output.eDP-1.scale.{scale}",
-                f"output.eDP-1.vrrpolicy.{vrr_pol}",
+                f"output.{out_name}.mode.{mode_spec}",
+                f"output.{out_name}.scale.{scale}",
+                f"output.{out_name}.vrrpolicy.{vrr_pol}",
             ]
             try:
                 proc = Gio.Subprocess.new(
@@ -1338,9 +1945,17 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         if mode == "gamepad":
             self.btn_mode_gamepad.add_css_class("perf-active")
             self.btn_mode_desktop.remove_css_class("active-mode")
+            if hasattr(self, "hdr_mode_btn"):
+                self.hdr_mode_btn.set_label("🎮 Gamepad")
+                self.hdr_mode_btn.add_css_class("perf-active")
+                self.hdr_mode_btn.remove_css_class("active-mode")
         else:
             self.btn_mode_desktop.add_css_class("active-mode")
             self.btn_mode_gamepad.remove_css_class("perf-active")
+            if hasattr(self, "hdr_mode_btn"):
+                self.hdr_mode_btn.set_label("🖱️ Desktop")
+                self.hdr_mode_btn.add_css_class("active-mode")
+                self.hdr_mode_btn.remove_css_class("perf-active")
 
     def _save_handheld_rgb_pref(self, color, brightness):
         dock_raw = read_sysfs(f"/dev/shm/msi-claw-dock-{os.getuid()}", "handheld")
@@ -1481,12 +2096,17 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
             return False
         if self._is_plasma() and os.path.exists("/usr/bin/kscreen-doctor"):
             try:
+                cmd = (
+                    ["/usr/bin/kscreen-doctor", "output.eDP-1.rotation.none", "output.eDP-1.autoRotatePolicy.never"]
+                    if state
+                    else ["/usr/bin/kscreen-doctor", "output.eDP-1.autoRotatePolicy.inTabletMode"]
+                )
                 subprocess.Popen(
-                    ["/usr/bin/kscreen-doctor", "output.1.rotation.normal"],
+                    cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                self._toast("Landscape orientation locked" if state else "Display rotation synced via KWin")
+                self._toast("Landscape orientation locked" if state else "Auto-rotation enabled (Tablet Mode)")
             except Exception:
                 pass
             return False
@@ -1582,15 +2202,16 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
     def _on_show_about(self, _btn):
         repo_dir, remote_url = self._resolve_repo_info()
         website = remote_url if remote_url else repo_dir.as_uri()
+        safe_repo = GLib.markup_escape_text(str(repo_dir))
         try:
             about = Adw.AboutDialog(
                 application_name="MSI Claw Center",
                 application_icon="input-gaming-symbolic",
                 version="1.2.0",
                 comments=(
-                    "Native GTK4 / Libadwaita Handheld & Mini-PC Control Center for MSI Claw A1M "
-                    "(Intel Core Ultra 7 155H · KDE Plasma 6 & GNOME Wayland).\n\n"
-                    f"Local repository: {repo_dir}"
+                    "Native GTK4 / Libadwaita Handheld &amp; Mini-PC Control Center for MSI Claw A1M "
+                    "(Intel Core Ultra 7 155H · KDE Plasma 6 &amp; GNOME Wayland).\n\n"
+                    f"Local repository: {safe_repo}"
                 ),
                 website=website,
                 license_type=Gtk.License.GPL_3_0,
@@ -1615,10 +2236,13 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
             self._toast(f"Error opening Users settings: {e}")
 
     def _power_setup_script(self):
+        sys_script = "/usr/local/sbin/msi-claw-system-power-setup.sh"
+        if os.path.isfile(sys_script) and os.access(sys_script, os.X_OK):
+            return sys_script
         repo_script = os.path.expanduser("~/msi-claw-center/sbin/msi-claw-system-power-setup.sh")
         if os.path.isfile(repo_script) and os.access(repo_script, os.X_OK):
             return repo_script
-        return "/usr/local/sbin/msi-claw-system-power-setup.sh"
+        return sys_script
 
     def _on_scx_mode_clicked(self, _btn, mode):
         script = self._power_setup_script()
@@ -1653,22 +2277,24 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
     def _on_gpu_priority_clicked(self, _btn):
         target = "off" if gpu_priority_active() else "on"
         script = self._power_setup_script()
+
+        def on_done(p, r):
+            ok = self._finish_ok(p, r)
+            if not ok:
+                self._toast("Canceled")
+            elif target == "on":
+                self._toast("GPU Priority ON (CPU capped ~3.45 GHz)")
+            else:
+                restored_pct = read_sysfs("/sys/devices/system/cpu/intel_pstate/max_perf_pct", "100")
+                self._toast(f"GPU Priority OFF (CPU max {restored_pct}% restored)")
+            self._refresh_telemetry()
+
         try:
             proc = Gio.Subprocess.new(
                 ["pkexec", script, "--gpu-priority", target],
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
             )
-            proc.wait_check_async(
-                None,
-                lambda p, r: (
-                    self._toast(
-                        "GPU Priority ON (CPU capped ~3.45 GHz)"
-                        if target == "on" and self._finish_ok(p, r)
-                        else ("Full CPU Boost (100%) restored" if self._finish_ok(p, r) else "Canceled")
-                    ),
-                    self._refresh_telemetry(),
-                ),
-            )
+            proc.wait_check_async(None, on_done)
         except Exception as e:
             self._toast(f"Error: {e}")
 
@@ -1712,23 +2338,26 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
 
     def _on_charge_limit_clicked(self, _btn, pct):
         helper = "/usr/local/sbin/msi-claw-battery-limit"
+
+        def on_done(p, r):
+            ok = self._finish_ok(p, r)
+            if ok:
+                self._update_charge_limit_highlights(pct)
+                self._toast(f"Battery Charge Limit set to {pct}% (EC 0xD7)")
+            else:
+                lk = kernel_lockdown_mode()
+                if lk:
+                    self._toast(f"Blocked by Secure Boot Kernel Lockdown ({lk}): EC debugfs unavailable")
+                else:
+                    self._toast(f"Failed to set {pct}% charge limit")
+            GLib.timeout_add(400, lambda: (self._refresh_telemetry(), GLib.SOURCE_REMOVE)[1])
+
         try:
             proc = Gio.Subprocess.new(
                 ["pkexec", helper, "set", str(pct)],
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
             )
-            proc.wait_check_async(
-                None,
-                lambda p, r: (
-                    self._toast(
-                        f"Battery Charge Limit set to {pct}% (EC 0xD7)"
-                        if self._finish_ok(p, r)
-                        else f"Failed to set {pct}% charge limit"
-                    ),
-                    GLib.timeout_add(400, lambda: (self._refresh_telemetry(), GLib.SOURCE_REMOVE)[1]),
-                ),
-            )
-            self._update_charge_limit_highlights(pct)
+            proc.wait_check_async(None, on_done)
         except Exception as e:
             self._toast(f"Battery limit error: {e}")
 
@@ -1748,22 +2377,32 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
             return False
         helper = "/usr/local/sbin/msi-claw-cooler-boost"
         target = "on" if state else "off"
+
+        def on_done(p, r):
+            ok = self._finish_ok(p, r)
+            if ok:
+                self._toast(
+                    "EC Cooler Boost ON (~8,700 RPM Max Fans)"
+                    if state
+                    else "EC Cooler Boost OFF (Auto Quiet Fan Curve)"
+                )
+            else:
+                self._updating_cooler_ui = True
+                self.cooler_boost_switch.set_active(not state)
+                self._updating_cooler_ui = False
+                lk = kernel_lockdown_mode()
+                if lk:
+                    self._toast(f"Blocked by Secure Boot Kernel Lockdown ({lk}): EC debugfs unavailable")
+                else:
+                    self._toast("Cooler Boost toggle failed")
+            GLib.timeout_add(350, lambda: (self._refresh_telemetry(), GLib.SOURCE_REMOVE)[1])
+
         try:
             proc = Gio.Subprocess.new(
                 ["pkexec", helper, target],
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE,
             )
-            proc.wait_check_async(
-                None,
-                lambda p, r: (
-                    self._toast(
-                        "EC Cooler Boost ON (~8,700 RPM Max Fans)"
-                        if state and self._finish_ok(p, r)
-                        else ("EC Cooler Boost OFF (Auto Quiet Fan Curve)" if self._finish_ok(p, r) else "Cooler Boost toggle failed")
-                    ),
-                    GLib.timeout_add(350, lambda: (self._refresh_telemetry(), GLib.SOURCE_REMOVE)[1]),
-                ),
-            )
+            proc.wait_check_async(None, on_done)
         except Exception as e:
             self._toast(f"Cooler Boost error: {e}")
         return False
@@ -1799,8 +2438,8 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                         "enabled": self.gyro_enabled,
                         "sensitivity": round(self.gyro_sens, 2),
                         "mode": self.gyro_mode,
-                        "invert_x": False,
-                        "invert_y": False,
+                        "invert_x": self.gyro_invert_x,
+                        "invert_y": self.gyro_invert_y,
                     },
                     indent=2,
                 )
@@ -1819,7 +2458,7 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                 Gio.DBusCallFlags.NONE,
                 250,
                 None,
-                lambda b, r: (b.call_finish(r) if b else None),
+                lambda b, r: self._finish_dbus_call(b, r, "reload-gyro"),
             )
         except Exception:
             self._send_claw_cmd("reload-gyro")
@@ -1830,6 +2469,91 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                 else "Gyro Aim OFF"
             )
 
+    def _load_key_bindings(self):
+        cfg = dict(self.default_key_cfg)
+        if self.keys_cfg_path.exists():
+            try:
+                loaded = json.loads(self.keys_cfg_path.read_text())
+                if isinstance(loaded, dict):
+                    for k in self.default_key_cfg:
+                        val = str(loaded.get(k, "")).strip()
+                        if val:
+                            cfg[k] = val
+            except Exception:
+                pass
+        self.key_cfg = cfg
+
+    def _save_and_apply_key_bindings(self, toast_msg=None):
+        try:
+            self.keys_cfg_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.keys_cfg_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.key_cfg, indent=2) + "\n")
+            tmp.replace(self.keys_cfg_path)
+        except OSError:
+            pass
+        try:
+            self.ses_bus.call(
+                "io.msiclaw.Controller",
+                "/io/msiclaw/Controller",
+                "io.msiclaw.Controller",
+                "ReloadKeyBindings",
+                None,
+                None,
+                Gio.DBusCallFlags.NONE,
+                250,
+                None,
+                lambda b, r: self._finish_dbus_call(b, r, "reload-keys"),
+            )
+        except Exception:
+            self._send_claw_cmd("reload-keys")
+        if toast_msg:
+            self._toast(toast_msg)
+
+    def _sync_key_dropdowns_ui(self):
+        self._updating_keys_ui = True
+        try:
+            for cfg_key, (dd, opt_list) in self.key_dropdowns.items():
+                cur_val = self.key_cfg.get(cfg_key, self.default_key_cfg.get(cfg_key, ""))
+                sel_i = 0
+                for oi, (oval, _) in enumerate(opt_list):
+                    if oval == cur_val:
+                        sel_i = oi
+                        break
+                dd.set_selected(sel_i)
+        finally:
+            self._updating_keys_ui = False
+
+    def _on_key_dropdown_changed(self, dd, _pspec, cfg_key, opt_list):
+        if self._updating_keys_ui:
+            return
+        idx = int(dd.get_selected())
+        if 0 <= idx < len(opt_list):
+            act_val, act_lbl = opt_list[idx]
+            if self.key_cfg.get(cfg_key) != act_val:
+                self.key_cfg[cfg_key] = act_val
+                self._save_and_apply_key_bindings(f"Bound {cfg_key} -> {act_lbl}")
+
+    def _on_key_preset_clicked(self, _btn, preset_name):
+        if preset_name == "default":
+            self.key_cfg = dict(self.default_key_cfg)
+            msg = "Restored Default Claw 4-Key & M1/M2 Bindings"
+        elif preset_name == "ab_paddles":
+            self.key_cfg["m1_gamepad"] = "hw:BTN_SOUTH"
+            self.key_cfg["m2_gamepad"] = "hw:BTN_EAST"
+            msg = "Mapped Gamepad M1 = Xbox A & M2 = Xbox B (Hardware MCU)"
+        elif preset_name == "r3l3_paddles":
+            self.key_cfg["m1_gamepad"] = "hw:BTN_THUMBR"
+            self.key_cfg["m2_gamepad"] = "hw:BTN_THUMBL"
+            msg = "Mapped Gamepad M1 = Xbox R3 & M2 = Xbox L3 (Hardware MCU)"
+        elif preset_name == "desk_productivity":
+            self.key_cfg["m1_desktop"] = "copy"
+            self.key_cfg["m2_desktop"] = "paste"
+            msg = "Mapped Desktop M1 = Copy (Ctrl+C) & M2 = Paste (Ctrl+V)"
+        else:
+            return
+        self._sync_key_dropdowns_ui()
+        self._save_and_apply_key_bindings(msg)
+
     def _refresh_telemetry(self):
         # 1. AC / Battery / Dock Telemetry
         ac_online = read_sysfs("/sys/class/power_supply/ADP1/online", "1") == "1"
@@ -1838,7 +2562,13 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
         status = read_sysfs(f"{bat}/status", "Unknown")
         dock_raw = read_sysfs(f"/dev/shm/msi-claw-dock-{os.getuid()}", "handheld")
         is_docked = dock_raw.startswith("docked")
-        chg_limit_txt = read_sysfs("/run/msi-claw-charge-limit", "") or read_sysfs("/var/lib/msi-claw/charge-limit", "100")
+        run_chg_txt = read_sysfs("/run/msi-claw-charge-limit", "")
+        if run_chg_txt:
+            chg_limit_txt = run_chg_txt
+        elif kernel_lockdown_mode():
+            chg_limit_txt = "0"
+        else:
+            chg_limit_txt = read_sysfs("/var/lib/msi-claw/charge-limit", "100")
         try:
             chg_limit = int(chg_limit_txt)
         except ValueError:
@@ -2044,6 +2774,8 @@ class MSIClawCenterWindow(Adw.ApplicationWindow):
                     g_sens = max(1.0, min(10.0, float(gparts[1])))
                 except ValueError:
                     g_sens = self.gyro_sens
+                g_mode = gparts[2].strip() if len(gparts) >= 3 and gparts[2].strip() in ("lt_hold", "always") else self.gyro_mode
+                self.gyro_mode = g_mode
                 if g_en != self.gyro_enabled or abs(g_sens - self.gyro_sens) >= 0.1:
                     self.gyro_enabled = g_en
                     self.gyro_sens = g_sens
@@ -2070,7 +2802,7 @@ class MSIClawCenterApp(Adw.Application):
             Gtk.init()
             gtk_settings = Gtk.Settings.get_default()
             if gtk_settings is not None:
-                gtk_settings.reset_property("gtk-application-prefer-dark-theme")
+                gtk_settings.set_property("gtk-application-prefer-dark-theme", False)
         except Exception:
             pass
         Adw.Application.do_startup(self)
@@ -2140,7 +2872,7 @@ class MSIClawCenterApp(Adw.Application):
             self.show_window()
             return
         win = windows[0]
-        if win.get_visible() and win.is_active():
+        if win.get_visible():
             win._stop_polling()
             win.set_visible(False)
             try:
@@ -2175,7 +2907,15 @@ class MSIClawCenterApp(Adw.Application):
             gdrv, _ = resolve_arc_gpu()
             bat_cap = read_sysfs("/sys/class/power_supply/BAT1/capacity", "--")
             bat_status = read_sysfs("/sys/class/power_supply/BAT1/status", "Unknown")
-            chg_lim = read_sysfs("/run/msi-claw-charge-limit", "") or read_sysfs("/var/lib/msi-claw/charge-limit", "100")
+            run_chg = read_sysfs("/run/msi-claw-charge-limit", "")
+            lk_mode = kernel_lockdown_mode()
+            if run_chg:
+                chg_lim_disp = f"{run_chg}%"
+            elif lk_mode:
+                saved_chg = read_sysfs("/var/lib/msi-claw/charge-limit", "")
+                chg_lim_disp = f"locked (Secure Boot {lk_mode}; saved {saved_chg}%)" if saved_chg else f"locked (Secure Boot {lk_mode})"
+            else:
+                chg_lim_disp = f"{read_sysfs('/var/lib/msi-claw/charge-limit', '100')}%"
             cb_state = read_sysfs("/run/msi-claw-cooler-boost", "off")
             ctrl_mode = read_sysfs(f"/dev/shm/msi-claw-mode-{os.getuid()}", "desktop")
             dock_mode = read_sysfs(f"/dev/shm/msi-claw-dock-{os.getuid()}", "handheld")
@@ -2187,7 +2927,7 @@ class MSIClawCenterApp(Adw.Application):
             )
             status_obj = {
                 "battery": f"{bat_cap}% ({bat_status})",
-                "charge_limit": f"{chg_lim}%",
+                "charge_limit": chg_lim_disp,
                 "dock_state": dock_mode,
                 "cpu_temp": f"{float(read_sysfs(cpu_t, '0') or 0)/1000:.1f}°C",
                 "gpu_driver": gdrv,

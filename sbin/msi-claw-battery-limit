@@ -6,6 +6,7 @@ methods on EC register 0xD7 (value = 0x80 + percentage, range 50..100%).
 """
 import glob
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,17 @@ EC_OFFSET = 0x80
 RUN_STATE = Path("/run/msi-claw-charge-limit")
 PERSIST_DIR = Path("/var/lib/msi-claw")
 PERSIST_STATE = PERSIST_DIR / "charge-limit"
+
+
+def kernel_lockdown_mode() -> str:
+    try:
+        txt = Path("/sys/kernel/security/lockdown").read_text().strip()
+        m = re.search(r"\[([a-zA-Z0-9_-]+)\]", txt)
+        if m and m.group(1) != "none":
+            return m.group(1)
+    except OSError:
+        pass
+    return ""
 
 
 def find_wmi_dir():
@@ -85,8 +97,25 @@ def set_limit(wmi_dir: Path, pct: int, persist: bool = True) -> int:
 
 def main() -> int:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "get"
+    if os.geteuid() != 0:
+        print("Error: msi-claw-battery-limit must be run as root (e.g. via pkexec)", file=sys.stderr)
+        return 1
     wmi_dir = find_wmi_dir()
     if wmi_dir is None:
+        lk = kernel_lockdown_mode()
+        if lk and cmd == "restore":
+            print(
+                f"Notice: Skipping EC charge-limit restore under Secure Boot Kernel Lockdown ({lk}); "
+                f"msi-wmi-platform debugfs is unavailable.",
+                file=sys.stderr,
+            )
+            return 0
+        if lk:
+            print(
+                f"Error: Blocked by Secure Boot Kernel Lockdown ({lk}): msi-wmi-platform debugfs not available",
+                file=sys.stderr,
+            )
+            return 1
         print("msi-wmi-platform debugfs not available", file=sys.stderr)
         return 1
 
@@ -122,6 +151,23 @@ def main() -> int:
             verified = set_limit(wmi_dir, pct, persist=True)
             print(f"OK {verified}%")
             return 0
+    except PermissionError as exc:
+        lk = kernel_lockdown_mode()
+        if lk:
+            if cmd == "restore":
+                print(
+                    f"Notice: Skipping EC charge-limit restore under Secure Boot Kernel Lockdown ({lk}); "
+                    f"msi-wmi-platform debugfs access is restricted by the kernel.",
+                    file=sys.stderr,
+                )
+                return 0
+            print(
+                f"Error: Blocked by Secure Boot Kernel Lockdown ({lk}): msi-wmi-platform debugfs is restricted ({exc})",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

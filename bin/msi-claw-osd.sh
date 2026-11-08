@@ -121,7 +121,14 @@ EOF
     send_osd "Display Refresh Rate" "${CLAW_RES} @ ${target_hz}Hz (${CLAW_SCALE}x · VRR ${CLAW_VRR})" "video-display-symbolic"
     ;;
   power-profile)
-    cur_prof=$(gdbus call --system --dest net.hadess.PowerProfiles --object-path /net/hadess/PowerProfiles --method org.freedesktop.DBus.Properties.Get "net.hadess.PowerProfiles" "ActiveProfile" 2>/dev/null | sed -n "s/.*'\([^']*\)'.*/\1/p")
+    cur_prof=$(
+      gdbus call --system --dest org.freedesktop.UPower.PowerProfiles --object-path /org/freedesktop/UPower/PowerProfiles --method org.freedesktop.DBus.Properties.Get "org.freedesktop.UPower.PowerProfiles" "ActiveProfile" 2>/dev/null | sed -n "s/.*'\([^']*\)'.*/\1/p"
+    )
+    if [[ -z "${cur_prof}" ]]; then
+      cur_prof=$(
+        gdbus call --system --dest net.hadess.PowerProfiles --object-path /net/hadess/PowerProfiles --method org.freedesktop.DBus.Properties.Get "net.hadess.PowerProfiles" "ActiveProfile" 2>/dev/null | sed -n "s/.*'\([^']*\)'.*/\1/p"
+      )
+    fi
     target_prof="${2:-cycle}"
     if [[ "${target_prof}" == "cycle" ]]; then
       case "${cur_prof}" in
@@ -130,6 +137,11 @@ EOF
         *)           target_prof="power-saver" ;;
       esac
     fi
+    gdbus call --system \
+      --dest org.freedesktop.UPower.PowerProfiles \
+      --object-path /org/freedesktop/UPower/PowerProfiles \
+      --method org.freedesktop.DBus.Properties.Set \
+      "org.freedesktop.UPower.PowerProfiles" "ActiveProfile" "<'${target_prof}'>" >/dev/null 2>&1 || \
     gdbus call --system \
       --dest net.hadess.PowerProfiles \
       --object-path /net/hadess/PowerProfiles \

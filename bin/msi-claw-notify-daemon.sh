@@ -12,4 +12,12 @@ if pgrep -u "${UID:-$(id -u)}" -x labwc >/dev/null 2>&1 && \
     exec /usr/bin/mako
 fi
 
-exec /usr/bin/plasma_waitforname org.freedesktop.Notifications
+if [[ -x /usr/bin/plasma_waitforname ]]; then
+    exec /usr/bin/plasma_waitforname org.freedesktop.Notifications
+fi
+
+if [[ -x /usr/bin/mako ]] && ! pgrep -u "${UID:-$(id -u)}" -x gnome-shell >/dev/null 2>&1; then
+    exec /usr/bin/mako
+fi
+
+exit 0

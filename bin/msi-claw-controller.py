@@ -106,6 +106,8 @@ BTN_THUMBR = 0x13E # R3
 KEY_ESC = 1
 KEY_BACKSPACE = 14
 KEY_TAB = 15
+KEY_LEFTBRACE = 26
+KEY_RIGHTBRACE = 27
 KEY_ENTER = 28
 KEY_LEFTCTRL = 29
 KEY_A = 30
@@ -139,6 +141,49 @@ KEY_BRIGHTNESSUP = 225
 
 CLAW_PIDS = ("00001901", "00001902", "00001903", "00001904")
 CLAW_READ_MODE = bytes([0x0F, 0x00, 0x00, 0x3C, 0x26]).ljust(64, b"\x00")
+
+# MSI Claw MCU M1/M2 macro software intercept codes on event5 (KEY_RIGHTBRACE=27, KEY_LEFTBRACE=26)
+MCU_M1_SW_CODE = 0x59
+MCU_M2_SW_CODE = 0x58
+
+HW_MKEY_CODES = {
+    "hw:ABS_HAT0Y_UP": 0x01,
+    "hw:ABS_HAT0Y_DOWN": 0x02,
+    "hw:ABS_HAT0X_LEFT": 0x03,
+    "hw:ABS_HAT0X_RIGHT": 0x04,
+    "hw:BTN_TL": 0x05,
+    "hw:BTN_TR": 0x06,
+    "hw:BTN_THUMBL": 0x07,
+    "hw:BTN_THUMBR": 0x08,
+    "hw:BTN_SOUTH": 0x09,
+    "hw:BTN_EAST": 0x0A,
+    "hw:BTN_NORTH": 0x0B,
+    "hw:BTN_WEST": 0x0C,
+    "hw:BTN_MODE": 0x0D,
+    "hw:BTN_SELECT": 0x0E,
+    "hw:BTN_START": 0x0F,
+    "hw:BTN_TL2": 0x13,
+    "hw:BTN_TR2": 0x14,
+}
+
+DEFAULT_KEY_BINDINGS = {
+    "view_desktop": "esc",
+    "menu_desktop": "alt-tab",
+    "f16_tap": "toggle-center",
+    "f16_chord": "overview",
+    "f15_tap": "quick-settings",
+    "f15_chord": "toggle-osk",
+    "m1_desktop": "toggle-osk",
+    "m2_desktop": "enter",
+    "m1_gamepad": "gyro-hold",
+    "m2_gamepad": "toggle-osk",
+    "m1_chord": "screenshot",
+    "m2_chord": "toggle-gyro",
+    "a_desktop": "mouse-left",
+    "b_desktop": "mouse-right",
+    "x_desktop": "toggle-osk",
+    "y_desktop": "overview",
+}
 
 EVENT_STRUCT = struct.Struct("<qqHHi")
 
@@ -267,6 +312,8 @@ class MSIClawDaemon:
         self.ctrl_fd = None
         self.ctrl_path = None
         self.grabbed = False
+        self._cached_de = None
+        self._cached_de_ts = 0.0
 
         self.lx = 0
         self.ly = 0
@@ -304,6 +351,7 @@ class MSIClawDaemon:
         self.gyro_scale = 0.000000174
         self.gyro_active = False
         self.gyro_lt_latched = False
+        self.gyro_mkey_held = False
         self.gyro_bias_ready = False
         self.gyro_bias_x = 0.0
         self.gyro_bias_y = 0.0
@@ -312,6 +360,14 @@ class MSIClawDaemon:
         self.gyro_rem_y = 0.0
         self._find_gyro_iio()
         self._load_gyro_config()
+
+        # Customizable 4 Front System Buttons + M1/M2 Back Paddles + Desktop ABXY
+        self.keys_cfg_file = os.path.expanduser("~/.config/msi-claw-keys.json")
+        self.key_cfg = dict(DEFAULT_KEY_BINDINGS)
+        self.mkey_active_action = {}
+        self.abxy_active_action = {}
+        self.last_mcu_mkey_codes = (None, None)
+        self._load_keys_config()
 
         # Cached session D-Bus connection (safe fallback if bus isn't ready yet)
         self.bus = None
@@ -430,6 +486,9 @@ class MSIClawDaemon:
                             <method name="Cut"/>
                             <method name="SelectAll"/>
                             <method name="Undo"/>
+                            <method name="HideKeyboard"/>
+                            <method name="ShowKeyboard"/>
+                            <method name="ToggleKeyboard"/>
                             <method name="SendAction">
                               <arg type="s" name="action" direction="in"/>
                             </method>
@@ -457,6 +516,7 @@ class MSIClawDaemon:
                               <arg type="d" name="sensitivity" direction="out"/>
                               <arg type="s" name="mode" direction="out"/>
                             </method>
+                            <method name="ReloadKeyBindings"/>
                           </interface>
                         </node>"""
                     )
@@ -465,8 +525,8 @@ class MSIClawDaemon:
                         if act and self.action_w is not None:
                             try:
                                 os.write(self.action_w, (act + "\n").encode("utf-8"))
-                            except OSError:
-                                pass
+                            except OSError as e:
+                                print(f"[_queue_action] Error: {e}", flush=True)
 
                     def _on_method_call(_conn, _sender, _path, _iface, method, params, invocation):
                         try:
@@ -484,6 +544,15 @@ class MSIClawDaemon:
                                 invocation.return_value(None)
                             elif method == "Undo":
                                 _queue_action("undo")
+                                invocation.return_value(None)
+                            elif method in ("HideKeyboard", "CollapseKeyboard", "CloseKeyboard"):
+                                _queue_action("hide-osk")
+                                invocation.return_value(None)
+                            elif method in ("ShowKeyboard", "OpenKeyboard"):
+                                _queue_action("show-osk")
+                                invocation.return_value(None)
+                            elif method in ("ToggleKeyboard", "ToggleOSK"):
+                                _queue_action("toggle-osk")
                                 invocation.return_value(None)
                             elif method == "SendAction":
                                 act = str(params.unpack()[0]).strip().lower()
@@ -531,6 +600,9 @@ class MSIClawDaemon:
                                 invocation.return_value(
                                     GLib.Variant("(bds)", (bool(self.gyro_enabled), float(self.gyro_sens), str(self.gyro_mode)))
                                 )
+                            elif method == "ReloadKeyBindings":
+                                _queue_action("reload-keys")
+                                invocation.return_value(None)
                             else:
                                 invocation.return_dbus_error(
                                     "org.freedesktop.DBus.Error.UnknownMethod",
@@ -553,6 +625,24 @@ class MSIClawDaemon:
                         Gio.BusNameOwnerFlags.REPLACE | Gio.BusNameOwnerFlags.ALLOW_REPLACEMENT,
                         None,
                         None,
+                    )
+
+                    def _on_screensaver_active_changed(_conn, _sender, _path, _iface, _sig, params):
+                        try:
+                            is_locked = bool(params.unpack()[0])
+                            if is_locked and self.wake_w is not None:
+                                os.write(self.wake_w, b"L")
+                        except Exception:
+                            pass
+
+                    sess_bus.signal_subscribe(
+                        None,
+                        "org.freedesktop.ScreenSaver",
+                        "ActiveChanged",
+                        None,
+                        None,
+                        Gio.DBusSignalFlags.NONE,
+                        _on_screensaver_active_changed,
                     )
                 except Exception as e:
                     print(f"Session D-Bus io.msiclaw.Controller unavailable: {e}", flush=True)
@@ -595,6 +685,83 @@ class MSIClawDaemon:
                 return "/dev/" + os.path.basename(sys_dir)
         return None
 
+    def _get_mkey_addrs(self, dev_path):
+        addrs = (0x00BB, 0x0164)
+        try:
+            sys_dir = "/sys/class/hidraw/" + os.path.basename(dev_path)
+            d = os.path.realpath(os.path.join(sys_dir, "device"))
+            while d != "/" and not os.path.exists(os.path.join(d, "bcdDevice")):
+                d = os.path.dirname(d)
+            bcd_file = os.path.join(d, "bcdDevice")
+            if os.path.exists(bcd_file):
+                bcd = int(open(bcd_file).read().strip(), 16)
+                major, minor = bcd >> 8, bcd & 0xFF
+                if not ((major == 1 and minor >= 0x66) or (major == 2 and minor >= 0x17) or major >= 3):
+                    addrs = (0x007A, 0x011F)
+        except Exception:
+            pass
+        return addrs
+
+    def _desired_mcu_mkey_codes(self):
+        m1_ch = self.key_cfg.get("m1_chord", "screenshot")
+        m2_ch = self.key_cfg.get("m2_chord", "toggle-gyro")
+        if self.mode == "gamepad":
+            m1_act = self.key_cfg.get("m1_gamepad", "gyro-hold")
+            m2_act = self.key_cfg.get("m2_gamepad", "toggle-osk")
+            if m1_act in HW_MKEY_CODES:
+                m1_code = HW_MKEY_CODES[m1_act]
+            elif m1_act in ("disabled", "none") and m1_ch in ("disabled", "none"):
+                m1_code = 0xFF
+            else:
+                m1_code = MCU_M1_SW_CODE
+            if m2_act in HW_MKEY_CODES:
+                m2_code = HW_MKEY_CODES[m2_act]
+            elif m2_act in ("disabled", "none") and m2_ch in ("disabled", "none"):
+                m2_code = 0xFF
+            else:
+                m2_code = MCU_M2_SW_CODE
+        else:
+            m1_act = self.key_cfg.get("m1_desktop", "toggle-osk")
+            m2_act = self.key_cfg.get("m2_desktop", "enter")
+            m1_code = 0xFF if (m1_act in ("disabled", "none") and m1_ch in ("disabled", "none")) else MCU_M1_SW_CODE
+            m2_code = 0xFF if (m2_act in ("disabled", "none") and m2_ch in ("disabled", "none")) else MCU_M2_SW_CODE
+        return m1_code, m2_code
+
+    def sync_mcu_mkeys(self, force=False):
+        want = self._desired_mcu_mkey_codes()
+        if not force and self.last_mcu_mkey_codes == want:
+            return True
+        dev_path = self._find_claw_hidraw()
+        if not dev_path or not os.access(dev_path, os.R_OK | os.W_OK):
+            return False
+        m1_addr, m2_addr = self._get_mkey_addrs(dev_path)
+        try:
+            fd = os.open(dev_path, os.O_RDWR | os.O_NONBLOCK)
+        except OSError:
+            return False
+        try:
+            while select.select([fd], [], [], 0.002)[0]:
+                if not os.read(fd, 64):
+                    break
+            for addr, code in ((m1_addr, want[0]), (m2_addr, want[1])):
+                pkt = bytes(
+                    [0x0F, 0x00, 0x00, 0x3C, 0x21, 0x01, (addr >> 8) & 0xFF, addr & 0xFF, 0x07, 0x04, 0x00, code, 0xFF, 0xFF, 0xFF, 0xFF]
+                ).ljust(64, b"\x00")
+                os.write(fd, pkt)
+                if select.select([fd], [], [], 0.04)[0]:
+                    while select.select([fd], [], [], 0.002)[0]:
+                        if not os.read(fd, 64):
+                            break
+            self.last_mcu_mkey_codes = want
+            return True
+        except OSError:
+            return False
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
     def ensure_mcu_xinput(self, force=False):
         now = time.monotonic()
         if not force and (now - self.last_mcu_xinput_time) < 1.0:
@@ -607,11 +774,12 @@ class MSIClawDaemon:
             fd = os.open(dev_path, os.O_RDWR | os.O_NONBLOCK)
         except OSError:
             return False
+        switched = False
         try:
             while select.select([fd], [], [], 0.002)[0]:
                 if not os.read(fd, 64):
                     break
-            # Query current MCU mode first (0x26 -> 0x27 ACK); ONLY switch if not already XINPUT (0x01)!
+            # Query current MCU mode first (0x26 -> 0x27 ACK); ONLY switch if not already XINPUT (0x01) + MACRO (0x00)!
             os.write(fd, CLAW_READ_MODE)
             cur_mode = None
             mkeys_fn = 0x00
@@ -619,14 +787,15 @@ class MSIClawDaemon:
                 resp = os.read(fd, 64)
                 if len(resp) >= 7 and resp[3] == 0x3C and resp[4] == 0x27:
                     cur_mode = resp[5]
-                    mkeys_fn = resp[6] if resp[6] < 3 else 0x00
-            if cur_mode == 0x01:
-                return True
-            pkt = bytes([0x0F, 0x00, 0x00, 0x3C, 0x24, 0x01, mkeys_fn]).ljust(64, b"\x00")
+                    mkeys_fn = resp[6]
+            if cur_mode == 0x01 and mkeys_fn == 0x00:
+                return False
+            pkt = bytes([0x0F, 0x00, 0x00, 0x3C, 0x24, 0x01, 0x00]).ljust(64, b"\x00")
             os.write(fd, pkt)
             if select.select([fd], [], [], 0.06)[0]:
                 os.read(fd, 64)
-            print(f"Switched MCU from mode {cur_mode} back to XINPUT (0x01)", flush=True)
+            print(f"Switched MCU from mode={cur_mode}/mkeys={mkeys_fn} back to XINPUT (0x01, macro=0x00)", flush=True)
+            switched = True
             return True
         except OSError:
             return False
@@ -635,6 +804,8 @@ class MSIClawDaemon:
                 os.close(fd)
             except OSError:
                 pass
+            if switched or self.last_mcu_mkey_codes == (None, None):
+                self.sync_mcu_mkeys(force=True)
 
     def sync_face_keybindings(self):
         # When event4 (AT Translated Set 2 keyboard) is passively monitored in evdev,
@@ -739,13 +910,19 @@ class MSIClawDaemon:
             return "labwc"
         if "gnome" in de or "gnome" in sess:
             return "gnome"
+        now = time.monotonic()
+        if self._cached_de and (now - self._cached_de_ts) < 15.0:
+            return self._cached_de
+        detected = "unknown"
         if subprocess.call(["pgrep", "-x", "kwin_wayland"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-            return "kde"
-        if subprocess.call(["pgrep", "-x", "labwc"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-            return "labwc"
-        if subprocess.call(["pgrep", "-x", "gnome-shell"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
-            return "gnome"
-        return "unknown"
+            detected = "kde"
+        elif subprocess.call(["pgrep", "-x", "labwc"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            detected = "labwc"
+        elif subprocess.call(["pgrep", "-x", "gnome-shell"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            detected = "gnome"
+        self._cached_de = detected
+        self._cached_de_ts = now
+        return detected
 
     def _is_labwc_session(self):
         return self._desktop_type() == "labwc"
@@ -773,9 +950,10 @@ class MSIClawDaemon:
     def wake_display_and_lockscreen(self):
         # 1. Zero-net pointer micro-nudge resets Mutter / KWin / swayidle IdleMonitor to 0ms
         try:
-            self.vmouse.emit(EV_REL, REL_X, 1)
+            self.vmouse.emit(EV_REL, REL_X, 2)
             self.vmouse.syn()
-            self.vmouse.emit(EV_REL, REL_X, -1)
+            time.sleep(0.02)
+            self.vmouse.emit(EV_REL, REL_X, -2)
             self.vmouse.syn()
         except OSError:
             pass
@@ -796,19 +974,37 @@ class MSIClawDaemon:
                 except Exception:
                     pass
             return
-        elif dtype == "kde" and os.path.exists("/usr/bin/kscreen-doctor"):
-            # Only invoke kscreen-doctor when WAYLAND_DISPLAY socket is present (prevents Qt xcb SIGABRT coredumps)
-            wdisp = wenv.get("WAYLAND_DISPLAY")
-            if wdisp and os.path.exists(os.path.join(wenv["XDG_RUNTIME_DIR"], wdisp)):
+        elif dtype == "kde":
+            if GLib is not None:
                 try:
-                    subprocess.Popen(
-                        ["kscreen-doctor", "--dpms", "on"],
-                        env=wenv,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
+                    bus = self._get_bus()
+                    if bus is not None:
+                        bus.call_sync(
+                            "org.freedesktop.ScreenSaver",
+                            "/ScreenSaver",
+                            "org.freedesktop.ScreenSaver",
+                            "SimulateUserActivity",
+                            None,
+                            None,
+                            Gio.DBusCallFlags.NO_AUTO_START,
+                            200,
+                            None,
+                        )
                 except Exception:
                     pass
+            if os.path.exists("/usr/bin/kscreen-doctor"):
+                # Only invoke kscreen-doctor when WAYLAND_DISPLAY socket is present (prevents Qt xcb SIGABRT coredumps)
+                wdisp = wenv.get("WAYLAND_DISPLAY")
+                if wdisp and os.path.exists(os.path.join(wenv["XDG_RUNTIME_DIR"], wdisp)):
+                    try:
+                        subprocess.Popen(
+                            ["kscreen-doctor", "--dpms", "on"],
+                            env=wenv,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                    except Exception:
+                        pass
             return
 
         # 3. Ensure Mutter DPMS PowerSaveMode is ON (0) so post-suspend blanking never leaves panel dark
@@ -883,7 +1079,7 @@ class MSIClawDaemon:
         # Release every virtual button/key we may be holding and reset analog/chord state
         for btn in (BTN_LEFT, BTN_RIGHT, BTN_MIDDLE):
             self.vmouse.key(btn, 0)
-        for k in (KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_BACKSPACE, KEY_LEFTALT):
+        for k in (KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_BACKSPACE, KEY_LEFTALT, KEY_ESC, KEY_ENTER, KEY_SPACE, KEY_TAB):
             self.vkbd.key(k, 0)
         self.alt_tab_active = False
         self.rt_clicked = False
@@ -891,7 +1087,38 @@ class MSIClawDaemon:
         self.lt = self.rt = 0
         self.hat_x = self.hat_y = 0
         self.gyro_lt_latched = False
+        self.gyro_mkey_held = False
+        self.mkey_active_action.clear()
+        self.abxy_active_action.clear()
         self._set_gyro_hw_active(False)
+
+    def _load_keys_config(self):
+        cfg = dict(DEFAULT_KEY_BINDINGS)
+        if os.path.exists(self.keys_cfg_file):
+            try:
+                loaded = json.loads(open(self.keys_cfg_file).read())
+                if isinstance(loaded, dict):
+                    for k in DEFAULT_KEY_BINDINGS:
+                        val = str(loaded.get(k, "")).strip()
+                        if val:
+                            cfg[k] = val
+            except Exception:
+                pass
+        else:
+            self.key_cfg = cfg
+            self._save_keys_config()
+            return
+        self.key_cfg = cfg
+
+    def _save_keys_config(self):
+        try:
+            os.makedirs(os.path.dirname(self.keys_cfg_file), exist_ok=True)
+            tmp = self.keys_cfg_file + f".tmp.{os.getpid()}"
+            with open(tmp, "w") as kf:
+                kf.write(json.dumps(self.key_cfg, indent=2) + "\n")
+            os.replace(tmp, self.keys_cfg_file)
+        except OSError:
+            pass
 
     def _find_gyro_iio(self):
         for iio_dir in sorted(glob.glob("/sys/bus/iio/devices/iio:device*")):
@@ -1110,26 +1337,31 @@ class MSIClawDaemon:
                 timeout_ms=3500,
             )
 
-    def toggle_mode(self):
-        # Release any held mouse buttons or keys before switching
+    def set_mode(self, target_mode, notify=True):
+        if target_mode not in ("desktop", "gamepad"):
+            return
+        if self.mode == target_mode and (self.grabbed == (target_mode == "desktop")):
+            return
         self.release_all()
-
-        if self.mode == "desktop":
-            self.mode = "gamepad"
-            self.update_grab()
-            self.notify_user("MSI Claw Mode", "Gamepad Mode (Xbox Controller Active)", "input-gaming-symbolic")
-        else:
-            self.mode = "desktop"
-            self.update_grab()
-            self.notify_user("MSI Claw Mode", "Desktop Control Mode (Mouse & Keyboard Active)", "input-mouse-symbolic")
-
+        self.mode = target_mode
+        self.update_grab()
+        if notify:
+            if self.mode == "gamepad":
+                self.notify_user("MSI Claw Mode", "Gamepad Mode (Xbox Controller Active)", "input-gaming-symbolic")
+            else:
+                self.notify_user("MSI Claw Mode", "Desktop Control Mode (Mouse & Keyboard Active)", "input-mouse-symbolic")
         if self._desktop_type() == "gnome" and GLib is not None:
             try:
                 self._call_claw("SetControllerMode", GLib.Variant("(s)", (self.mode,)))
             except Exception:
                 pass
         self._write_mode_state()
+        self.sync_mcu_mkeys()
         print(f"Switched controller mode to: {self.mode}", flush=True)
+
+    def toggle_mode(self):
+        target = "gamepad" if self.mode == "desktop" else "desktop"
+        self.set_mode(target, notify=True)
 
     def _write_mode_state(self):
         try:
@@ -1158,7 +1390,7 @@ class MSIClawDaemon:
         bus = self._get_bus()
         if bus is not None:
             try:
-                res = bus.call_sync(
+                res_vis = bus.call_sync(
                     "org.kde.KWin",
                     "/VirtualKeyboard",
                     "org.freedesktop.DBus.Properties",
@@ -1169,8 +1401,20 @@ class MSIClawDaemon:
                     200,
                     None,
                 )
-                is_visible = bool(res.unpack()[0])
-                if is_visible:
+                is_visible = bool(res_vis.unpack()[0])
+                res_act = bus.call_sync(
+                    "org.kde.KWin",
+                    "/VirtualKeyboard",
+                    "org.freedesktop.DBus.Properties",
+                    "Get",
+                    GLib.Variant("(ss)", ("org.kde.kwin.VirtualKeyboard", "active")),
+                    None,
+                    Gio.DBusCallFlags.NONE,
+                    200,
+                    None,
+                )
+                is_active = bool(res_act.unpack()[0])
+                if is_visible or is_active:
                     bus.call_sync(
                         "org.kde.KWin",
                         "/VirtualKeyboard",
@@ -1236,6 +1480,108 @@ class MSIClawDaemon:
             )
             self.osk_open = False
 
+    def hide_osk(self):
+        # 0. Fast-path for lightweight wvkbd-mobintl OSK in labwc / wlroots session
+        if subprocess.call(["pgrep", "-x", "wvkbd-mobintl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+            osk_helper = os.path.expanduser("~/.local/bin/msi-claw-osk-toggle.sh")
+            if os.path.exists(osk_helper):
+                subprocess.Popen([osk_helper, "--hide"], env=self._wayland_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                return
+
+        # 1. Try KWin VirtualKeyboard (KDE Plasma Wayland)
+        bus = self._get_bus()
+        if bus is not None:
+            try:
+                bus.call_sync(
+                    "org.kde.KWin",
+                    "/VirtualKeyboard",
+                    "org.freedesktop.DBus.Properties",
+                    "Set",
+                    GLib.Variant("(ssv)", ("org.kde.kwin.VirtualKeyboard", "active", GLib.Variant("b", False))),
+                    None,
+                    Gio.DBusCallFlags.NONE,
+                    200,
+                    None,
+                )
+                self.osk_open = False
+                return
+            except Exception:
+                pass
+
+            try:
+                self._call_claw("CloseOSK")
+                self.osk_open = False
+                return
+            except Exception:
+                pass
+
+        # 2. GNOME Shell fallback: cycle screen-keyboard-enabled so OSK stays enabled for future taps
+        if self.osk_open and self._desktop_type() == "gnome":
+            subprocess.run(
+                ["gsettings", "set", "org.gnome.desktop.a11y.applications", "screen-keyboard-enabled", "false"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.05)
+            subprocess.run(
+                ["gsettings", "set", "org.gnome.desktop.a11y.applications", "screen-keyboard-enabled", "true"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            self.osk_open = False
+
+    def show_osk(self):
+        # 0. Fast-path for lightweight wvkbd-mobintl OSK in labwc / wlroots session
+        if subprocess.call(["pgrep", "-x", "wvkbd-mobintl"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0 or self._is_labwc_session():
+            osk_helper = os.path.expanduser("~/.local/bin/msi-claw-osk-toggle.sh")
+            if os.path.exists(osk_helper):
+                subprocess.Popen([osk_helper, "--show"], env=self._wayland_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                return
+
+        # 1. Try KWin VirtualKeyboard (KDE Plasma Wayland)
+        bus = self._get_bus()
+        if bus is not None:
+            try:
+                bus.call_sync(
+                    "org.kde.KWin",
+                    "/VirtualKeyboard",
+                    "org.kde.kwin.VirtualKeyboard",
+                    "forceActivate",
+                    None,
+                    None,
+                    Gio.DBusCallFlags.NONE,
+                    200,
+                    None,
+                )
+                self.osk_open = True
+                return
+            except Exception:
+                pass
+
+            try:
+                self._call_claw("OpenOSK")
+                self.osk_open = True
+                return
+            except Exception:
+                pass
+
+        # 2. GNOME fallback: tap TouchUp's bottom-left OSK button via Virtual Touch
+        if not self.osk_open and self._desktop_type() == "gnome":
+            x, y = 28, 1060
+            self.vtouch.emit(EV_ABS, ABS_MT_SLOT, 0)
+            self.vtouch.emit(EV_ABS, ABS_MT_TRACKING_ID, 1)
+            self.vtouch.emit(EV_ABS, ABS_MT_POSITION_X, x)
+            self.vtouch.emit(EV_ABS, ABS_MT_POSITION_Y, y)
+            self.vtouch.emit(EV_ABS, ABS_X, x)
+            self.vtouch.emit(EV_ABS, ABS_Y, y)
+            self.vtouch.emit(EV_KEY, BTN_TOUCH, 1)
+            self.vtouch.syn()
+            time.sleep(0.05)
+            self.vtouch.emit(EV_ABS, ABS_MT_TRACKING_ID, -1)
+            self.vtouch.emit(EV_KEY, BTN_TOUCH, 0)
+            self.vtouch.syn()
+            self.osk_open = True
+
     def toggle_center(self):
         try:
             bus = self._get_bus()
@@ -1265,7 +1611,26 @@ class MSIClawDaemon:
         except Exception as e:
             print(f"Error toggling MSI Claw Center: {e}", flush=True)
 
+    def hide_center_if_visible(self):
+        try:
+            bus = self._get_bus()
+            if bus is not None and GLib is not None:
+                bus.call_sync(
+                    "io.msiclaw.Center",
+                    "/io/msiclaw/Center",
+                    "org.gtk.Actions",
+                    "Activate",
+                    GLib.Variant("(sava{sv})", ("hide", [], {})),
+                    None,
+                    Gio.DBusCallFlags.NO_AUTO_START,
+                    150,
+                    None,
+                )
+        except Exception:
+            pass
+
     def toggle_overview(self):
+        self.hide_center_if_visible()
         dtype = self._desktop_type()
         # 0. Fast-path for labwc: toggle fuzzel launcher directly with zero D-Bus timeout
         if dtype == "labwc":
@@ -1325,6 +1690,7 @@ class MSIClawDaemon:
         self.vkbd.tap_key(KEY_LEFTMETA)
 
     def toggle_quick_settings(self):
+        self.hide_center_if_visible()
         dtype = self._desktop_type()
         # 0. Fast-path for lightweight labwc Quick Settings menu (F15)
         quick_helper = os.path.expanduser("~/.local/bin/msi-claw-quick-menu.sh")
@@ -1420,7 +1786,9 @@ class MSIClawDaemon:
                 self.toggle_mode()
         elif cmd == "toggle-osk":
             self.toggle_osk()
-        elif cmd in ("center", "toggle-center", "left-face"):
+        elif cmd == "left-face":
+            self.trigger_face_button("f16")
+        elif cmd in ("center", "toggle-center"):
             now = time.monotonic()
             if (now - self.last_left_face_time) >= 0.18:
                 self.last_left_face_time = now
@@ -1430,13 +1798,16 @@ class MSIClawDaemon:
             if (now - self.last_left_face_time) >= 0.18:
                 self.last_left_face_time = now
                 self.toggle_overview()
-        elif cmd == "right-face" or cmd == "quick-settings":
+        elif cmd == "right-face":
+            self.trigger_face_button("f15")
+        elif cmd == "quick-settings":
             now = time.monotonic()
             if (now - self.last_right_face_time) >= 0.18:
                 self.last_right_face_time = now
                 self.toggle_quick_settings()
         elif cmd == "recheck-devices":
             self.ensure_mcu_xinput(force=True)
+            self.sync_mcu_mkeys(force=True)
             self.open_aux_devices()
             self.sync_dock_state(notify=False)
         elif cmd == "sync-dock":
@@ -1447,10 +1818,156 @@ class MSIClawDaemon:
             self._load_gyro_config()
             if not self._needs_gyro_tick():
                 self._set_gyro_hw_active(False)
+        elif cmd == "reload-keys":
+            self._load_keys_config()
+            self.sync_mcu_mkeys(force=True)
         elif cmd == "toggle-gyro":
             self.toggle_gyro_aim()
         elif cmd in ("copy", "paste", "cut", "select-all", "undo"):
             self.perform_clipboard_action(cmd)
+
+    def execute_bound_action(self, action, pressed=True, tap=False):
+        act = (action or "").strip()
+        if not act or act in ("disabled", "none", "gamepad-native") or act.startswith("hw:"):
+            return
+
+        hold_key_map = {
+            "esc": KEY_ESC,
+            "enter": KEY_ENTER,
+            "space": KEY_SPACE,
+            "tab": KEY_TAB,
+            "backspace": KEY_BACKSPACE,
+        }
+        hold_mouse_map = {
+            "mouse-left": BTN_LEFT,
+            "mouse-right": BTN_RIGHT,
+            "mouse-middle": BTN_MIDDLE,
+        }
+
+        if act == "gyro-hold":
+            if tap:
+                self.toggle_gyro_aim()
+            else:
+                self.gyro_mkey_held = bool(pressed)
+                if not pressed and not self._needs_gyro_tick():
+                    self._set_gyro_hw_active(False)
+            return
+
+        if act in hold_key_map:
+            kcode = hold_key_map[act]
+            if tap:
+                self.vkbd.tap_key(kcode)
+            else:
+                self.vkbd.key(kcode, 1 if pressed else 0)
+            return
+
+        if act in hold_mouse_map:
+            mbtn = hold_mouse_map[act]
+            if tap:
+                self.vmouse.key(mbtn, 1)
+                time.sleep(0.015)
+                self.vmouse.key(mbtn, 0)
+            else:
+                self.vmouse.key(mbtn, 1 if pressed else 0)
+            return
+
+        if not pressed and not tap:
+            return
+
+        if act in ("center", "toggle-center"):
+            self.toggle_center()
+        elif act == "quick-settings":
+            self.toggle_quick_settings()
+        elif act == "toggle-osk":
+            self.toggle_osk()
+        elif act in ("overview", "toggle-overview"):
+            self.toggle_overview()
+        elif act in ("toggle", "toggle-mode"):
+            self.toggle_mode()
+        elif act == "toggle-gyro":
+            self.toggle_gyro_aim()
+        elif act == "screenshot":
+            osd_helper = os.path.expanduser("~/.local/bin/msi-claw-osd.sh")
+            if self._is_labwc_session() and os.path.exists(osd_helper):
+                subprocess.Popen(
+                    [osd_helper, "screenshot"],
+                    env=self._wayland_env(),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            else:
+                self.vkbd.tap_key(KEY_SYSRQ)
+        elif act == "alt-tab":
+            self.vkbd.tap_combo([KEY_LEFTALT], KEY_TAB)
+        elif act == "close-window":
+            self.vkbd.tap_combo([KEY_LEFTALT], KEY_F4)
+        elif act in ("copy", "paste", "cut", "select-all", "undo"):
+            self.perform_clipboard_action(act)
+        elif act == "browser-back":
+            self.vkbd.tap_combo([KEY_LEFTALT], KEY_LEFT)
+        elif act == "browser-forward":
+            self.vkbd.tap_combo([KEY_LEFTALT], KEY_RIGHT)
+        elif act == "vol-up":
+            self.vkbd.tap_key(KEY_VOLUMEUP)
+        elif act == "vol-down":
+            self.vkbd.tap_key(KEY_VOLUMEDOWN)
+        elif act == "vol-mute":
+            self.vkbd.tap_key(KEY_MUTE)
+        elif act == "bright-up":
+            self.vkbd.tap_key(KEY_BRIGHTNESSUP)
+        elif act == "bright-down":
+            self.vkbd.tap_key(KEY_BRIGHTNESSDOWN)
+
+    def trigger_face_button(self, which):
+        now = time.monotonic()
+        if which == "f16":
+            if (now - self.last_left_face_time) < 0.18:
+                return
+            self.last_left_face_time = now
+            if self.view_held or self.menu_held:
+                self.view_used_as_chord = True
+                self.menu_used_as_chord = True
+                act = self.key_cfg.get("f16_chord", "overview")
+            else:
+                act = self.key_cfg.get("f16_tap", "toggle-center")
+            self.execute_bound_action(act, tap=True)
+        elif which == "f15":
+            if (now - self.last_right_face_time) < 0.18:
+                return
+            self.last_right_face_time = now
+            if self.view_held or self.menu_held:
+                self.view_used_as_chord = True
+                self.menu_used_as_chord = True
+                act = self.key_cfg.get("f15_chord", "toggle-osk")
+            else:
+                act = self.key_cfg.get("f15_tap", "quick-settings")
+            self.execute_bound_action(act, tap=True)
+
+    def handle_mkey_event(self, which, val):
+        if val == 1:
+            if self.view_held:
+                self.view_used_as_chord = True
+                act = self.key_cfg.get(
+                    "m1_chord" if which == "m1" else "m2_chord",
+                    "screenshot" if which == "m1" else "toggle-gyro",
+                )
+            elif self.mode == "desktop":
+                act = self.key_cfg.get(
+                    "m1_desktop" if which == "m1" else "m2_desktop",
+                    "toggle-osk" if which == "m1" else "enter",
+                )
+            else:
+                act = self.key_cfg.get(
+                    "m1_gamepad" if which == "m1" else "m2_gamepad",
+                    "gyro-hold" if which == "m1" else "toggle-osk",
+                )
+            self.mkey_active_action[which] = act
+            self.execute_bound_action(act, pressed=True, tap=False)
+        elif val == 0:
+            act = self.mkey_active_action.pop(which, None)
+            if act:
+                self.execute_bound_action(act, pressed=False, tap=False)
 
     def _window_terminal_kind(self):
         cls = self.active_win_class.strip().lower()
@@ -1605,9 +2122,9 @@ class MSIClawDaemon:
             elif "consumer control" not in nl and "system control" not in nl:
                 try:
                     key_cap = open(os.path.join(dev_dir, "capabilities/key")).read().strip().split()
-                    if key_cap and key_cap[-1] != "0":
+                    if key_cap and (int(key_cap[-1], 16) & 0x3FFFFFFE) == 0x3FFFFFFE:
                         has_ext_kbd = True
-                except OSError:
+                except (OSError, ValueError):
                     pass
 
         docked = bool(ext_outputs) or has_ext_kbd or has_ext_mouse
@@ -1830,7 +2347,7 @@ class MSIClawDaemon:
                         self.vkbd.key(KEY_LEFTALT, 0)
                         self.alt_tab_active = False
                     elif not self.view_used_as_chord and self.mode == "desktop":
-                        self.vkbd.tap_key(KEY_ESC)
+                        self.execute_bound_action(self.key_cfg.get("view_desktop", "esc"), tap=True)
                 return
 
             if code == BTN_START:
@@ -1844,7 +2361,7 @@ class MSIClawDaemon:
                         return
                 elif val == 0:
                     if not self.menu_used_as_chord and self.mode == "desktop":
-                        self.vkbd.tap_combo([KEY_LEFTALT], KEY_TAB)
+                        self.execute_bound_action(self.key_cfg.get("menu_desktop", "alt-tab"), tap=True)
                 return
 
             # View + L3 toggles 6-Axis Gyro Aim in both Gamepad & Desktop modes
@@ -1906,41 +2423,65 @@ class MSIClawDaemon:
                 self.hat_y = val
 
         elif ev_type == EV_KEY:
-            if code == BTN_SOUTH:  # A -> Left Click (or View+A -> Paste)
+            if code == BTN_SOUTH:  # A -> Default Left Click (or View+A -> Paste)
                 if val == 0:
-                    self.vmouse.key(BTN_LEFT, 0)  # release unconditionally: View may have been pressed mid-click
+                    act = self.abxy_active_action.pop("a", None)
+                    if act:
+                        self.execute_bound_action(act, pressed=False, tap=False)
+                    else:
+                        self.vmouse.key(BTN_LEFT, 0)
                 elif self.view_held:
                     if val == 1:
                         self.view_used_as_chord = True
                         self.perform_clipboard_action("paste")
-                else:
-                    self.vmouse.key(BTN_LEFT, val)
+                elif val == 1:
+                    act = self.key_cfg.get("a_desktop", "mouse-left")
+                    self.abxy_active_action["a"] = act
+                    self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_EAST:  # B -> Right Click (or View+B -> Alt+F4 Close Window)
+            elif code == BTN_EAST:  # B -> Default Right Click (or View+B -> Alt+F4 Close Window)
                 if val == 0:
-                    self.vmouse.key(BTN_RIGHT, 0)
+                    act = self.abxy_active_action.pop("b", None)
+                    if act:
+                        self.execute_bound_action(act, pressed=False, tap=False)
+                    else:
+                        self.vmouse.key(BTN_RIGHT, 0)
                 elif self.view_held:
                     if val == 1:
                         self.view_used_as_chord = True
                         self.vkbd.tap_combo([KEY_LEFTALT], KEY_F4)
-                else:
-                    self.vmouse.key(BTN_RIGHT, val)
+                elif val == 1:
+                    act = self.key_cfg.get("b_desktop", "mouse-right")
+                    self.abxy_active_action["b"] = act
+                    self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_NORTH:  # X -> Toggle OSK (or View+X -> Copy)
-                if val == 1:
-                    if self.view_held:
+            elif code == BTN_NORTH:  # X -> Default Toggle OSK (or View+X -> Copy)
+                if val == 0:
+                    act = self.abxy_active_action.pop("x", None)
+                    if act:
+                        self.execute_bound_action(act, pressed=False, tap=False)
+                elif self.view_held:
+                    if val == 1:
                         self.view_used_as_chord = True
                         self.perform_clipboard_action("copy")
-                    else:
-                        self.toggle_osk()
+                elif val == 1:
+                    act = self.key_cfg.get("x_desktop", "toggle-osk")
+                    self.abxy_active_action["x"] = act
+                    self.execute_bound_action(act, pressed=True, tap=False)
 
-            elif code == BTN_WEST:  # Y -> Overview / Apps (or View+Y -> Screenshot)
-                if val == 1:
-                    if self.view_held:
+            elif code == BTN_WEST:  # Y -> Default Overview / Apps (or View+Y -> Screenshot)
+                if val == 0:
+                    act = self.abxy_active_action.pop("y", None)
+                    if act:
+                        self.execute_bound_action(act, pressed=False, tap=False)
+                elif self.view_held:
+                    if val == 1:
                         self.view_used_as_chord = True
                         self.vkbd.tap_key(KEY_SYSRQ)
-                    else:
-                        self.toggle_overview()
+                elif val == 1:
+                    act = self.key_cfg.get("y_desktop", "overview")
+                    self.abxy_active_action["y"] = act
+                    self.execute_bound_action(act, pressed=True, tap=False)
 
             elif code == BTN_TL:  # LB -> Back (or View+LB -> Alt+Shift+Tab)
                 if val == 1:
@@ -2065,7 +2606,11 @@ class MSIClawDaemon:
         )
 
     def _needs_gyro_tick(self):
-        if self.gyro_dir is None or not self.gyro_enabled or self.mode != "gamepad":
+        if self.gyro_dir is None:
+            return False
+        if self.gyro_mkey_held:
+            return True
+        if not self.gyro_enabled or self.mode != "gamepad":
             return False
         if self.gyro_mode == "always":
             return True
@@ -2162,13 +2707,21 @@ class MSIClawDaemon:
                 if not data:
                     break
                 for b in data:
-                    if b == ord("S"):
-                        # Release any held virtual buttons/modifiers cleanly prior to suspend
+                    if b == ord("L"):
+                        # Screen locked: ensure Desktop Control Mode so thumbstick mouse, OSK toggle, and Enter work on lockscreen
+                        if self.mode != "desktop":
+                            self.set_mode("desktop", notify=False)
+                    elif b == ord("S"):
+                        # Release any held virtual buttons/modifiers cleanly prior to suspend and restore Desktop Control Mode
                         self.release_all()
                         self.view_held = self.menu_held = False
+                        if self.mode != "desktop":
+                            self.set_mode("desktop", notify=False)
                     elif b == ord("W"):
-                        # System resumed from s2idle: unblank lockscreen at +80ms & +450ms,
+                        # System resumed from s2idle: ensure Desktop Control Mode, unblank lockscreen at +80ms & +450ms,
                         # and re-assert MCU XINPUT (0x01) at +600ms once USB 3-9 finishes resume init
+                        if self.mode != "desktop":
+                            self.set_mode("desktop", notify=False)
                         now = time.monotonic()
                         self.wake_deadlines = [now + 0.08, now + 0.45, now + 0.65]
                         self.wake_mcu_pending = True
@@ -2223,6 +2776,10 @@ class MSIClawDaemon:
                 self.perform_clipboard_action(act)
             elif act == "toggle-osk":
                 self.toggle_osk()
+            elif act in ("hide-osk", "collapse-osk", "close-osk"):
+                self.hide_osk()
+            elif act in ("show-osk", "open-osk"):
+                self.show_osk()
             elif act in ("toggle", "toggle-mode"):
                 self.toggle_mode()
             elif act == "toggle-gyro":
@@ -2231,6 +2788,13 @@ class MSIClawDaemon:
                 self._load_gyro_config()
                 if not self._needs_gyro_tick():
                     self._set_gyro_hw_active(False)
+            elif act == "reload-keys":
+                self._load_keys_config()
+                self.sync_mcu_mkeys(force=True)
+            elif act == "left-face":
+                self.trigger_face_button("f16")
+            elif act == "right-face":
+                self.trigger_face_button("f15")
             elif act in ("center", "toggle-center"):
                 self.toggle_center()
             elif act in ("overview", "toggle-overview"):
@@ -2253,8 +2817,11 @@ class MSIClawDaemon:
                         saw_real_activity = True
                 else:
                     for offset in range(0, len(data) - (len(data) % EVENT_STRUCT.size), EVENT_STRUCT.size):
-                        _, _, ev_type, _, val = EVENT_STRUCT.unpack_from(data, offset)
-                        if ev_type in (EV_KEY, EV_REL) and val != 0:
+                        _, _, ev_type, code, val = EVENT_STRUCT.unpack_from(data, offset)
+                        if ev_type == EV_KEY and code in (KEY_RIGHTBRACE, KEY_LEFTBRACE):
+                            if val in (0, 1):
+                                self.handle_mkey_event("m1" if code == KEY_RIGHTBRACE else "m2", val)
+                        elif ev_type in (EV_KEY, EV_REL) and val != 0:
                             saw_real_activity = True
             except OSError as e:
                 if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
@@ -2266,14 +2833,13 @@ class MSIClawDaemon:
                 self.mcu_det_fds.pop(fd, None)
                 break
         if saw_real_activity and (time.monotonic() - self.last_mcu_xinput_time) >= 0.5:
-            # MCU slipped into 0x04 firmware desktop mode (e.g. holding View >= 2s or post-wake)
-            self.view_held = False
-            self.menu_held = False
-            if self.alt_tab_active:
-                self.vkbd.key(KEY_LEFTALT, 0)
-                self.alt_tab_active = False
-            print("Detected MCU 0x04 desktop packet; restoring XINPUT (0x01) immediately", flush=True)
-            self.ensure_mcu_xinput(force=True)
+            # Check if MCU actually slipped into 0x04 firmware desktop mode (e.g. holding View >= 2s or post-wake)
+            if self.ensure_mcu_xinput(force=True):
+                self.view_held = False
+                self.menu_held = False
+                if self.alt_tab_active:
+                    self.vkbd.key(KEY_LEFTALT, 0)
+                    self.alt_tab_active = False
 
     def _read_face_fd(self, fd):
         while True:
@@ -2281,20 +2847,13 @@ class MSIClawDaemon:
                 data = os.read(fd, EVENT_STRUCT.size * 32)
                 if not data:
                     break
-                for offset in range(0, len(data), EVENT_STRUCT.size):
+                for offset in range(0, len(data) - (len(data) % EVENT_STRUCT.size), EVENT_STRUCT.size):
                     _, _, ev_type, code, val = EVENT_STRUCT.unpack_from(data, offset)
                     if ev_type == EV_KEY and val == 1:
-                        now = time.monotonic()
-                        if code == KEY_F16 and (now - self.last_left_face_time) >= 0.18:
-                            self.last_left_face_time = now
-                            if self.view_held:
-                                self.view_used_as_chord = True
-                                self.toggle_overview()
-                            else:
-                                self.toggle_center()
-                        elif code == KEY_F15 and (now - self.last_right_face_time) >= 0.18:
-                            self.last_right_face_time = now
-                            self.toggle_quick_settings()
+                        if code == KEY_F16:
+                            self.trigger_face_button("f16")
+                        elif code == KEY_F15:
+                            self.trigger_face_button("f15")
             except OSError as e:
                 if e.errno in (errno.EAGAIN, errno.EWOULDBLOCK, errno.EINTR):
                     break
@@ -2313,8 +2872,9 @@ class MSIClawDaemon:
         last_gyro_tick = time.monotonic()
         gyro_tick_active = False
 
-        # Ensure MCU starts in XINPUT (0x01), open auxiliary/face devices, and sync state
+        # Ensure MCU starts in XINPUT (0x01), sync M1/M2 paddles, open auxiliary/face devices, and sync state
         self.ensure_mcu_xinput(force=True)
+        self.sync_mcu_mkeys(force=True)
         self.open_aux_devices()
         self.sync_dock_state(notify=False)
         self.handle_external_cmd(unlink_empty=True)
@@ -2338,6 +2898,7 @@ class MSIClawDaemon:
                     if not self.wake_deadlines and self.wake_mcu_pending:
                         self.wake_mcu_pending = False
                         self.ensure_mcu_xinput(force=True)
+                        self.sync_mcu_mkeys(force=True)
                         self.open_aux_devices()
                         self.sync_dock_state(notify=False, force_rgb=True)
                         if self.ctrl_fd is None:
@@ -2355,6 +2916,7 @@ class MSIClawDaemon:
                 if self.open_controller():
                     # Fast USB re-enumeration: re-assert XINPUT and reopen aux nodes that died with it
                     self.ensure_mcu_xinput(force=True)
+                    self.sync_mcu_mkeys(force=True)
                     self.open_aux_devices()
                 else:
                     try:
@@ -2462,7 +3024,7 @@ class MSIClawDaemon:
                         data = os.read(self.ctrl_fd, EVENT_STRUCT.size * 32)
                         if not data:
                             break
-                        for offset in range(0, len(data), EVENT_STRUCT.size):
+                        for offset in range(0, len(data) - (len(data) % EVENT_STRUCT.size), EVENT_STRUCT.size):
                             _, _, ev_type, code, val = EVENT_STRUCT.unpack_from(data, offset)
                             if ev_type != EV_SYN:
                                 self.handle_event(ev_type, code, val)

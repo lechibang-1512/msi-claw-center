@@ -45,7 +45,10 @@ bt_pow=$(bluetoothctl show 2>/dev/null | awk '/Powered:/{print $2; exit}')
 [[ "${bt_pow}" == "yes" ]] && bt_lbl="On" || bt_lbl="Off"
 
 ctrl_mode=$(cat "/dev/shm/msi-claw-mode-$(id -u)" 2>/dev/null || echo "desktop")
-ppd_prof=$(gdbus call --system --dest net.hadess.PowerProfiles --object-path /net/hadess/PowerProfiles --method org.freedesktop.DBus.Properties.Get "net.hadess.PowerProfiles" "ActiveProfile" 2>/dev/null | sed -n "s/.*'\([^']*\)'.*/\1/p")
+ppd_prof=$(gdbus call --system --dest org.freedesktop.UPower.PowerProfiles --object-path /org/freedesktop/UPower/PowerProfiles --method org.freedesktop.DBus.Properties.Get "org.freedesktop.UPower.PowerProfiles" "ActiveProfile" 2>/dev/null | sed -n "s/.*'\([^']*\)'.*/\1/p")
+if [[ -z "${ppd_prof}" ]]; then
+  ppd_prof=$(gdbus call --system --dest net.hadess.PowerProfiles --object-path /net/hadess/PowerProfiles --method org.freedesktop.DBus.Properties.Get "net.hadess.PowerProfiles" "ActiveProfile" 2>/dev/null | sed -n "s/.*'\([^']*\)'.*/\1/p")
+fi
 
 CLAW_HZ="120"
 CLAW_SCALE="1.5"

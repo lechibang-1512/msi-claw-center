@@ -528,14 +528,14 @@ options xe enable_dc_balance=1
 EOF
 
     cat > /etc/modprobe.d/iwlwifi-powersave.conf << 'EOF'
-options iwlwifi power_save=1
-options iwlmld power_scheme=2
+options iwlwifi power_save=0
+options iwlmld power_scheme=1
 EOF
 
     install -d /etc/NetworkManager/conf.d
     cat > /etc/NetworkManager/conf.d/wifi-powersave-off.conf << 'EOF'
 [connection]
-wifi.powersave = 3
+wifi.powersave = 2
 EOF
 
     cat > /etc/gamemode.ini << 'EOF'
@@ -695,9 +695,11 @@ apply_memory_zram_and_scx_fixes
 echo "[5/8] Optimizing Btrfs (/ & /home) with noatime,commit=60 and remounting live..."
 [[ -f /etc/fstab.orig.bak ]] || cp -a /etc/fstab /etc/fstab.orig.bak
 python3 - << 'PYEOF'
+import os
 from pathlib import Path
 fstab = Path("/etc/fstab")
-lines = fstab.read_text().splitlines()
+orig_txt = fstab.read_text()
+lines = orig_txt.splitlines()
 out = []
 for line in lines:
     stripped = line.strip()
@@ -721,7 +723,12 @@ for line in lines:
             parts[3] = ",".join(opt_list)
             line = " ".join(parts)
     out.append(line)
-fstab.write_text("\n".join(out) + "\n")
+new_txt = "\n".join(out) + "\n"
+if new_txt != orig_txt:
+    tmp = fstab.with_name(f".fstab.tmp.{os.getpid()}")
+    tmp.write_text(new_txt)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, fstab)
 PYEOF
 systemctl daemon-reload
 mount -o remount / || true
@@ -778,7 +785,7 @@ if rpm -q gnome-shell >/dev/null 2>&1 && [[ -f "${EXT_DIR}/us-enhanced.json" ]] 
     stock_src() {
         local f="$1" want
         [[ -x /usr/local/sbin/msi-claw-shell-backup-sync ]] && /usr/local/sbin/msi-claw-shell-backup-sync >&2 || true
-        want=$(rpm -qf --dump "$f" | awk -v p="$f" '$1 == p {print $4; exit}')
+        want=$(rpm -qf --dump "$f" | awk -v p="$f" '$1 == p && !found {print $4; found=1}')
         for c in "$f.orig.bak" "$f"; do
             [[ -f "$c" && "$(sha256sum "$c" | cut -d' ' -f1)" == "$want" ]] && { echo "$c"; return 0; }
         done
@@ -853,9 +860,9 @@ fi
 
 # Re-apply appropriate TuneD profile based on current AC/Battery state
 if [[ "$(cat /sys/class/power_supply/ADP1/online 2>/dev/null || echo 1)" == "0" ]]; then
-    tuned-adm profile powersave || true
+    tuned-adm profile balanced-battery 2>/dev/null || tuned-adm profile powersave 2>/dev/null || true
 else
-    tuned-adm profile balanced || true
+    tuned-adm profile balanced 2>/dev/null || true
 fi
 
 echo "=== MSI Claw A1M System-Level Battery & OSK Optimization Complete! ==="

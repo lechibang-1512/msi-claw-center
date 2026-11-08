@@ -20,7 +20,7 @@ install -d "${HOME}/.local/bin" \
            "${HOME}/.local/share/applications" \
            "${HOME}/.local/share/dbus-1/services"
 
-for b in msi-claw-center msi-claw-controller.py msi-claw-rgb msi-claw-action.sh msi-claw-notify-daemon.sh; do
+for b in msi-claw-center msi-claw-controller.py msi-claw-rgb msi-claw-action.sh msi-claw-notify-daemon.sh msi-claw-osd.sh msi-claw-osk-toggle.sh msi-claw-quick-menu.sh; do
     chmod 0755 "${REPO_DIR}/bin/${b}"
     ln -sfn "${REPO_DIR}/bin/${b}" "${HOME}/.local/bin/${b}"
 done
